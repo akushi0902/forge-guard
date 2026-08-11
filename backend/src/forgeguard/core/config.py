@@ -45,6 +45,26 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://postgres:postgres@localhost:5432/forgeguard_dev",
         description="Async PostgreSQL DSN (must use asyncpg driver prefix).",
     )
+    db_pool_min_size: int = Field(
+        default=5,
+        description="Minimum number of connections to keep open in the asyncpg pool.",
+    )
+    db_pool_max_size: int = Field(
+        default=20,
+        description="Maximum number of connections allowed in the asyncpg pool.",
+    )
+    db_pool_max_inactive_connection_lifetime: float = Field(
+        default=300.0,
+        description="Seconds an idle pool connection is retained before being closed.",
+    )
+    db_command_timeout: float = Field(
+        default=30.0,
+        description="Default per-query timeout in seconds for asyncpg connections.",
+    )
+    db_statement_cache_size: int = Field(
+        default=1024,
+        description="Per-connection prepared-statement cache size for asyncpg.",
+    )
 
     # ------------------------------------------------------------------ #
     # Security

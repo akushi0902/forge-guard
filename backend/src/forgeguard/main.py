@@ -18,6 +18,7 @@ isolated instances in tests.
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
@@ -37,6 +38,20 @@ from forgeguard.middleware.request_id import RequestIDMiddleware
 from forgeguard.middleware.security_headers import SecurityHeadersMiddleware
 
 logger = structlog.get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage asyncpg connection pool lifecycle.
+
+    Initialises the pool on startup and drains it on shutdown so all in-flight
+    queries can complete before the process exits.
+    """
+    from forgeguard.data.database import close_pool, init_pool  # noqa: PLC0415
+
+    await init_pool()
+    yield
+    await close_pool()
 
 
 def create_app() -> FastAPI:
@@ -73,6 +88,7 @@ def create_app() -> FastAPI:
         docs_url="/api/v1/docs",
         redoc_url="/api/v1/redoc",
         openapi_url="/api/v1/openapi.json",
+        lifespan=lifespan,
     )
 
     # ------------------------------------------------------------------ #

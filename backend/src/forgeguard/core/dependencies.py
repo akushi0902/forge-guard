@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+import asyncpg
 from fastapi import Depends
 
 from forgeguard.core.config import Settings, get_settings
@@ -77,8 +78,93 @@ def get_ai_engine():
     return _ai_engine_instance
 
 
+# ------------------------------------------------------------------
+# Connection pool
+# ------------------------------------------------------------------
+
+
+async def get_pool() -> asyncpg.Pool:
+    """Return the application-level asyncpg connection pool.
+
+    The pool is initialised by the FastAPI lifespan handler; this provider
+    simply surfaces it for injection via Depends().
+    """
+    from forgeguard.data.database import get_pool as _get_pool  # noqa: PLC0415
+
+    return await _get_pool()
+
+
+# ------------------------------------------------------------------
+# Repository factories
+# ------------------------------------------------------------------
+
+
+async def get_user_repository(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    from forgeguard.data.repositories.users import UserRepository  # noqa: PLC0415
+
+    return UserRepository(pool)
+
+
+async def get_service_repository(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    from forgeguard.data.repositories.services import ServiceRepository  # noqa: PLC0415
+
+    return ServiceRepository(pool)
+
+
+async def get_policy_repository(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    from forgeguard.data.repositories.policies import PolicyRepository  # noqa: PLC0415
+
+    return PolicyRepository(pool)
+
+
+async def get_finding_repository(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    from forgeguard.data.repositories.findings import FindingRepository  # noqa: PLC0415
+
+    return FindingRepository(pool)
+
+
+async def get_score_repository(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    from forgeguard.data.repositories.scores import ScoreRepository  # noqa: PLC0415
+
+    return ScoreRepository(pool)
+
+
+async def get_decision_repository(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    from forgeguard.data.repositories.decisions import DecisionRepository  # noqa: PLC0415
+
+    return DecisionRepository(pool)
+
+
+async def get_audit_log_repository(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    from forgeguard.data.repositories.audit_logs import AuditLogRepository  # noqa: PLC0415
+
+    return AuditLogRepository(pool)
+
+
 __all__ = [
     "SettingsDep",
     "get_settings",
     "get_ai_engine",
+    "get_pool",
+    "get_user_repository",
+    "get_service_repository",
+    "get_policy_repository",
+    "get_finding_repository",
+    "get_score_repository",
+    "get_decision_repository",
+    "get_audit_log_repository",
 ]

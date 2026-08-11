@@ -196,3 +196,10 @@
 - **Files:** 1 (+514/-0)
 - **Duration:** 514ss
 - **Approach:** WO-012 required Alembic migration framework setup and integration tests. The infrastructure (alembic.ini, alembic/env.py, script.py.mako, and all 6 migration files) was already fully implemented by prior WOs (WO-001 scaffolded the framework; WO-007 through WO-010 created all domain migrations). The missing piece was a dedicated migration test file. Created backend/tests/data/test_migrations.py with 5 test classes (12 test methods) using function-scoped PostgreSQL 16 testcontainers for full isolation. Tests cover: (1) upgrade head creates all 15 ForgeGuard tables verified via information_schema queries, (2) downgrade base removes all tables cleanly, (3) idempotent upgrade runs twice without error, (4) step-by-step revision chain progression verifying FK ordering and per-revision table sets, (5) alembic check runs against the fully-migrated DB.
+
+## WO-013: User Story: WO-013 - Repository Pattern and Async Connection Pool
+- **Status:** completed
+- **Commit:** `9bfd2e3`
+- **Files:** 15 (+2018/-0)
+- **Duration:** 1126ss
+- **Approach:** Created asyncpg pool management module (database.py) with init_pool/close_pool/get_pool/health_check. Added 5 pool-config fields to Settings (min_size=5, max_size=20, etc.). Implemented abstract BaseRepository with _safe_insert/_safe_update_clause helpers that validate column names against developer-controlled frozensets before building dynamic SQL — values always use $1/$2 parameterization. Seven concrete repositories extend BaseRepository; append-only repos (AuditLogRepository, DecisionRepository, ScoreRepository) raise NotImplementedError on update/soft_delete. FastAPI lifespan wired for pool lifecycle. Repository DI factories added to dependencies.py. Integration tests use session-scoped asyncpg pool over the existing postgres_container testcontainer.
