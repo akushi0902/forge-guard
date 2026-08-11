@@ -1,0 +1,63 @@
+.claude/
+CLAUDE.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+ENV/
+.env
+.env.*
+!.env.example
+pip-wheel-metadata/
+.pip-cache/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# Ruff / linting
+.ruff_cache/
+
+# Mypy / type checking
+.mypy_cache/
+.dmypy.json
+
+# Alembic
+backend/alembic/versions/*.py
+!backend/alembic/versions/.gitkeep
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docker
+*.dockerignore
+
+# Node / frontend (for future WOs)
+node_modules/
+.npm/
+dist/
+.next/
+.nuxt/
+
+# Logs
+*.log
+logs/

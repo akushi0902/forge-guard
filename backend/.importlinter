@@ -1,0 +1,47 @@
+[importlinter]
+root_packages =
+    forgeguard
+include_external_packages = True
+
+# ---------------------------------------------------------------------- #
+# Contract 1: API layer must not import from Data layer directly
+# ---------------------------------------------------------------------- #
+[importlinter:contract:api-not-import-data]
+name = API layer must not import from Data layer directly
+type = forbidden
+source_modules =
+    forgeguard.api
+    forgeguard.api.routes
+forbidden_modules =
+    forgeguard.data
+    forgeguard.data.models
+    forgeguard.data.repositories
+ignore_imports =
+    forgeguard.api -> forgeguard.core
+
+# ---------------------------------------------------------------------- #
+# Contract 2: Services layer must not import from API layer
+# ---------------------------------------------------------------------- #
+[importlinter:contract:services-not-import-api]
+name = Services layer must not import from API layer
+type = forbidden
+source_modules =
+    forgeguard.services
+forbidden_modules =
+    forgeguard.api
+    forgeguard.api.routes
+
+# ---------------------------------------------------------------------- #
+# Contract 3: Data layer must not import from API or Services layers
+# ---------------------------------------------------------------------- #
+[importlinter:contract:data-no-upward-imports]
+name = Data layer must not import from API or Services layers
+type = forbidden
+source_modules =
+    forgeguard.data
+    forgeguard.data.models
+    forgeguard.data.repositories
+forbidden_modules =
+    forgeguard.api
+    forgeguard.api.routes
+    forgeguard.services
