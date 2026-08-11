@@ -315,3 +315,10 @@
 - **Files:** 8 (+670/-15)
 - **Duration:** 459ss
 - **Approach:** Stateless synchronizer token pattern: CSRF token = HMAC-SHA256(jti, csrf_secret) encoded as URL-safe base64. Stateless means no server-side storage — the token is cryptographically bound to the specific access token (via its unique JTI claim). When the access token is refreshed (new JTI), the old CSRF token is automatically invalid. Pure ASGI CSRFMiddleware at pipeline position 6 (after Auth at 5 so request.state.jti is available, before SecurityHeaders at 7). Authentication middleware updated to also set request.state.jti. Login and refresh routes decode the newly issued access token to extract JTI, compute CSRF token, and set X-CSRF-Token response header. csrf_secret_key is separate from jwt_secret_key in Settings.
+
+## WO-047: User Story: WO-047 - AI Explanation Generator for Risk Findings
+- **Status:** completed
+- **Commit:** `c2266fb`
+- **Files:** 10 (+1596/-0)
+- **Duration:** 936ss
+- **Approach:** Added RiskFinding/RiskSeverity/RiskDimension/FindingSource Pydantic models to models.py. Created PromptLoader (startup caching, str.format_map with SafeFormatDict for missing-key safety) and three .txt prompt templates. ExplanationGenerator collects candidates from dimension scores (score > threshold=40) and top-5 contributing factors, deduplicates in two passes (dimension+metric then cross-dimension metric), calls AIEngineService.generate_completion with asyncio.wait_for(5s) per finding concurrently via asyncio.gather, parses JSON response, falls back to template text on timeout/exception. FindingRepository already existed; created RemediationRecommendationRepository. Added migration to expand findings.dimension CHECK constraint to include release_guardian dimension values.

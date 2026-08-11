@@ -6,8 +6,10 @@ to JSONB and stored in the change_analysis column of release_assessments.
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
+from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -204,3 +206,55 @@ class RiskScoringConfig(BaseModel):
                 f"dimension_weights must sum to 1.0, got {float(total):.6f}"
             )
         return v
+
+
+# ---------------------------------------------------------------------------
+# Risk Finding models (WO-047)
+# ---------------------------------------------------------------------------
+
+
+class RiskSeverity(str, Enum):
+    """Severity level for a risk finding."""
+
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class RiskDimension(str, Enum):
+    """Analysis dimension for a risk finding."""
+
+    CODE_COMPLEXITY = "code_complexity"
+    TEST_COVERAGE = "test_coverage"
+    DEPENDENCIES = "dependencies"
+    SECURITY = "security"
+    HISTORICAL = "historical"
+
+
+class FindingSource(str, Enum):
+    """Indicates whether a finding's explanation was AI-generated or template-based."""
+
+    AI_GENERATED = "ai-generated"
+    TEMPLATE_GENERATED = "template-generated"
+
+
+class RiskFinding(BaseModel):
+    """A single risk finding produced by the ExplanationGenerator.
+
+    Contains natural-language explanation, business impact, and remediation
+    guidance for a specific risk detected in a release change analysis.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    assessment_id: str
+    service_id: str
+    title: str
+    severity: RiskSeverity
+    dimension: RiskDimension
+    explanation: str
+    business_impact: str
+    remediation_steps: list[str]
+    evidence: dict = Field(default_factory=dict)
+    confidence_score: float = Field(ge=0.0, le=1.0)
+    source: FindingSource
