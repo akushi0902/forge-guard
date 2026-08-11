@@ -329,3 +329,10 @@
 - **Files:** 13 (+1355/-2)
 - **Duration:** 756ss
 - **Approach:** Implemented JWT authentication flow with httpOnly cookie storage, CSRF token management, and automatic token refresh. Created a Zustand auth store that persists only non-sensitive user profile data to sessionStorage (never tokens or CSRF). The refresh interceptor uses a module-level refreshPromise to deduplicate concurrent 401 responses so exactly one refresh is issued for N concurrent failures. LoginPage uses Mantine useForm for validation with role-appropriate redirect on success. MSW handlers cover all auth endpoints including lockout (429) and expired refresh (401).
+
+## WO-027: User Story: WO-027 - Implement RBAC Enforcement Middleware for All Routes
+- **Status:** completed
+- **Commit:** `e7198b2`
+- **Files:** 5 (+945/-16)
+- **Duration:** 583ss
+- **Approach:** Implemented RBAC middleware as a pure ASGI class at pipeline position 6 (after AuthenticationMiddleware at pos 5, before CSRFMiddleware at pos 7). Route-permission mapping is separated into route_permissions.py for maintainability — each entry is a RoutePermission dataclass whose path_pattern is compiled to a regex at instantiation time (O(1) per-request matching). Wildcard patterns: * matches one path segment ([^/]+) and ** matches multiple segments (.+). The middleware enforces deny-by-default: any unmapped non-public route returns 403 with a 'not configured' message logged at WARN. HEAD requests inherit GET permissions. Missing user_role (auth middleware not run) returns 401 instead of 403.

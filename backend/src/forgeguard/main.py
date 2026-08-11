@@ -41,6 +41,7 @@ from forgeguard.middleware.csrf import CSRFMiddleware
 from forgeguard.middleware.logging import RequestLoggingMiddleware
 from forgeguard.middleware.metrics import MetricsMiddleware
 from forgeguard.middleware.rate_limiter import RateLimiterMiddleware
+from forgeguard.middleware.rbac import RBACMiddleware
 from forgeguard.middleware.request_id import RequestIDMiddleware
 from forgeguard.middleware.security_headers import SecurityHeadersMiddleware
 
@@ -117,12 +118,13 @@ def create_app() -> FastAPI:
     #   3. RateLimiterMiddleware     — token bucket per-IP rate limiting
     #   4. CORSMiddleware            — CORS headers, pre-flight handling
     #   5. AuthenticationMiddleware  — JWT cookie validation, user context attachment
-    #   6. CSRFMiddleware            — HMAC CSRF token validation for mutations
-    #   7. SecurityHeadersMiddleware — inject 7 security headers on all responses
-    #   8. MetricsMiddleware         — records Prometheus counters & histograms
-    #   9. AuditWriterMiddleware     — persists audit record post-2xx mutation
-    #  10. AuditPreHookMiddleware    — captures before-state for mutation requests
-    #  11. Route handler
+    #   6. RBACMiddleware            — route-permission mapping enforcement (deny-by-default)
+    #   7. CSRFMiddleware            — HMAC CSRF token validation for mutations
+    #   8. SecurityHeadersMiddleware — inject 7 security headers on all responses
+    #   9. MetricsMiddleware         — records Prometheus counters & histograms
+    #  10. AuditWriterMiddleware     — persists audit record post-2xx mutation
+    #  11. AuditPreHookMiddleware    — captures before-state for mutation requests
+    #  12. Route handler
     #
     # Therefore we register them innermost-first.
     # ------------------------------------------------------------------ #
@@ -141,31 +143,32 @@ def create_app() -> FastAPI:
         pool = await _get_pool()
         return AuditService(AuditLogRepository(pool))
 
-    app.add_middleware(AuditPreHookMiddleware)      # registered 1st → innermost (pos 10)
-    app.add_middleware(                             # registered 2nd → pos 9
+    app.add_middleware(AuditPreHookMiddleware)      # registered 1st → innermost (pos 11)
+    app.add_middleware(                             # registered 2nd → pos 10
         AuditWriterMiddleware,
         audit_service_factory=_audit_service_factory,
     )
-    app.add_middleware(MetricsMiddleware)           # registered 3rd → pos 8
-    app.add_middleware(SecurityHeadersMiddleware)   # registered 4th → pos 7
-    app.add_middleware(                             # registered 5th → pos 6
+    app.add_middleware(MetricsMiddleware)           # registered 3rd → pos 9
+    app.add_middleware(SecurityHeadersMiddleware)   # registered 4th → pos 8
+    app.add_middleware(                             # registered 5th → pos 7
         CSRFMiddleware,
         csrf_secret=settings.csrf_secret_key,
     )
-    app.add_middleware(                             # registered 6th → pos 5
+    app.add_middleware(RBACMiddleware)             # registered 6th → pos 6
+    app.add_middleware(                             # registered 7th → pos 5
         AuthenticationMiddleware,
         jwt_secret=settings.jwt_secret_key,
     )
-    app.add_middleware(                             # registered 7th → pos 4
+    app.add_middleware(                             # registered 8th → pos 4
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
         allow_credentials=True,
         allow_methods=settings.cors_allow_methods,
         allow_headers=settings.cors_allow_headers,
     )
-    app.add_middleware(RateLimiterMiddleware)       # registered 8th → pos 3
-    app.add_middleware(RequestLoggingMiddleware)    # registered 9th → pos 2
-    app.add_middleware(RequestIDMiddleware)         # registered 10th → outermost (pos 1)
+    app.add_middleware(RateLimiterMiddleware)       # registered 9th → pos 3
+    app.add_middleware(RequestLoggingMiddleware)    # registered 10th → pos 2
+    app.add_middleware(RequestIDMiddleware)         # registered 11th → outermost (pos 1)
 
     # ------------------------------------------------------------------ #
     # Routers
