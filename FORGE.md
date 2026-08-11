@@ -203,3 +203,10 @@
 - **Files:** 15 (+2018/-0)
 - **Duration:** 1126ss
 - **Approach:** Created asyncpg pool management module (database.py) with init_pool/close_pool/get_pool/health_check. Added 5 pool-config fields to Settings (min_size=5, max_size=20, etc.). Implemented abstract BaseRepository with _safe_insert/_safe_update_clause helpers that validate column names against developer-controlled frozensets before building dynamic SQL — values always use $1/$2 parameterization. Seven concrete repositories extend BaseRepository; append-only repos (AuditLogRepository, DecisionRepository, ScoreRepository) raise NotImplementedError on update/soft_delete. FastAPI lifespan wired for pool lifecycle. Repository DI factories added to dependencies.py. Integration tests use session-scoped asyncpg pool over the existing postgres_container testcontainer.
+
+## WO-014: User Story: WO-014 - Seed Data Fixtures for Demo Environment
+- **Status:** completed
+- **Commit:** `6b97a57`
+- **Files:** 9 (+1609/-0)
+- **Duration:** 857ss
+- **Approach:** Implemented a modular seed data system split across five domain fixture files (users, services, policies, assessments, remediation) and a central async seed() orchestrator. All inserts use ON CONFLICT DO NOTHING with stable fixed UUIDs for full idempotency. bcrypt cost-12 password hash computed at module import time (not build time). An Alembic data migration (revision a7b8c9d0e1f2) wraps the seed() call for migration-driven deployment. Integration tests verify all 10 acceptance criteria.
