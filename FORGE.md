@@ -77,3 +77,10 @@
 - **Files:** 18 (+2267/-4)
 - **Duration:** 829ss
 - **Approach:** Built the AI Engine as a layered composition under forgeguard/services/ai_engine/. Bottom layer: models.py (pure dataclasses/enums), errors.py (typed exceptions with no key leakage). Middle layer: abstract LLMProvider ABC, standalone CircuitBreaker (asyncio.Lock + deque-based rolling window, all transitions logged), standalone ResponseCache (OrderedDict LRU + TTL, SHA-256 keys). Provider layer: OpenAIProvider via httpx.AsyncClient with single 429 retry honouring Retry-After. Service layer: AIEngineService composes all three — cache checked before circuit breaker so cached responses survive an open circuit, health_check aggregates all metrics. Wired into DI via get_ai_engine() singleton in core/dependencies.py. All config via Settings (10 new fields).
+
+## WO-068: User Story: WO-068 - Implement Mantine Design System and Shared Components
+- **Status:** completed
+- **Commit:** `19f6325`
+- **Files:** 30 (+2895/-150)
+- **Duration:** 786ss
+- **Approach:** Built the ForgeGuard Mantine 7 design system from the ground up. Extracted a canonical theme file (forgeguard-theme.ts) with 6 custom color palettes, semantic typography scale, 8px spacing, radius tokens, and shadows. Created 14 shared UI components covering the full design spec: buttons, badges, forms, data visualization (ScoreRing SVG gauge), decision banners, sortable/paginated/expandable DataTable, stat cards, layout primitives (Breadcrumb, Dropdown, Modal, Accordion, Avatar, ServiceCard). Added 3 layout components (Sidebar with RBAC filtering and Zustand-persisted collapse state, TopBar with service selector and dark mode toggle, MainContent). Wrote Vitest + Testing Library tests for every component covering default render, variants, accessibility attributes, click handlers, and empty/edge states.
