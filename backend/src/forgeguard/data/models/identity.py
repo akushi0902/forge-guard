@@ -157,6 +157,11 @@ class RefreshToken(Base):
     revoked_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    replaced_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("refresh_tokens.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     user: Mapped[User] = relationship("User", back_populates="refresh_tokens")
 

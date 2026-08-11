@@ -12,6 +12,43 @@ from forgeguard.core.permissions import UserRole
 from forgeguard.core.validation import EmailField, ForgeGuardBaseModel
 
 
+class LoginRequest(ForgeGuardBaseModel):
+    """Payload for POST /api/v1/auth/login."""
+
+    email: EmailField
+    password: str = Field(min_length=1, description="User password.")
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _lowercase_email(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.lower()
+        return v
+
+
+class LoginResponse(ForgeGuardBaseModel):
+    """Success body returned by POST /api/v1/auth/login.
+
+    Does not include password_hash or name_encrypted bytes.
+    Tokens are delivered via Set-Cookie headers, not in this body.
+    """
+
+    model_config = {  # type: ignore[assignment]
+        "strict": True,
+        "extra": "ignore",
+        "frozen": False,
+        "str_strip_whitespace": True,
+        "populate_by_name": True,
+    }
+
+    id: uuid.UUID
+    email: str
+    name: Optional[str] = Field(default=None)
+    role: str
+    is_active: bool
+    created_at: datetime
+
+
 class UserRegisterRequest(ForgeGuardBaseModel):
     """Payload for POST /api/v1/auth/register.
 

@@ -1,11 +1,14 @@
-"""Auth endpoints — user registration.
+"""Auth endpoints — registration, login, token refresh, and logout.
 
 Routes:
     POST /api/v1/auth/register  — create a new user (Platform Admin only)
+    POST /api/v1/auth/login     — authenticate and issue JWT cookies
+    POST /api/v1/auth/refresh   — rotate refresh token
+    POST /api/v1/auth/logout    — revoke refresh token and clear cookies
 
 Authentication:
-    Platform Admin gating via X-User-Role header (placeholder until JWT WO).
-    Replace ``require_platform_admin`` with the real JWT dependency when ready.
+    Platform Admin gating for /register via X-User-Role header placeholder.
+    Login/refresh/logout use cookies only (no RBAC header required).
 """
 
 from __future__ import annotations
@@ -13,13 +16,21 @@ from __future__ import annotations
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Cookie, Depends, Request, Response
 from fastapi.responses import JSONResponse
 
-from forgeguard.api.schemas.auth import UserRegisterRequest, UserResponse
-from forgeguard.core.dependencies import get_user_repository
-from forgeguard.core.exceptions import ForbiddenError
+from forgeguard.api.schemas.auth import (
+    LoginRequest,
+    LoginResponse,
+    UserRegisterRequest,
+    UserResponse,
+)
+from forgeguard.core.config import get_settings
+from forgeguard.core.cookies import clear_auth_cookies, set_auth_cookies
+from forgeguard.core.dependencies import get_refresh_token_repository, get_user_repository
+from forgeguard.core.exceptions import ForbiddenError, UnauthorizedError
 from forgeguard.core.security import validate_password_strength
+from forgeguard.data.repositories.refresh_tokens import RefreshTokenRepository
 from forgeguard.data.repositories.users import UserRepository
 from forgeguard.services.auth import AuthService
 
@@ -51,6 +62,7 @@ async def require_platform_admin(request: Request) -> str:
 
 PlatformAdminDep = Annotated[str, Depends(require_platform_admin)]
 UserRepoDep = Annotated[UserRepository, Depends(get_user_repository)]
+RefreshTokenRepoDep = Annotated[RefreshTokenRepository, Depends(get_refresh_token_repository)]
 
 
 @router.post(
@@ -111,3 +123,87 @@ async def register_user(
 
     service = AuthService(user_repo)
     return await service.register_user(body)
+
+
+@router.post(
+    "/login",
+    response_model=LoginResponse,
+    status_code=200,
+    summary="Authenticate and receive JWT cookies",
+    responses={
+        200: {"description": "Login successful — tokens set as httpOnly cookies"},
+        401: {"description": "Invalid email or password"},
+        422: {"description": "Request validation error"},
+    },
+)
+async def login(
+    body: LoginRequest,
+    response: Response,
+    user_repo: UserRepoDep,
+    rt_repo: RefreshTokenRepoDep,
+) -> LoginResponse:
+    """Authenticate a user and set httpOnly Secure JWT cookies.
+
+    On success, sets:
+    - ``access_token`` cookie (15-min TTL, path=/)
+    - ``refresh_token`` cookie (7-day TTL, path=/api/v1/auth)
+    """
+    settings = get_settings()
+    service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key)
+    login_resp, access_token, raw_refresh = await service.authenticate_user(
+        body.email, body.password
+    )
+    set_auth_cookies(response, access_token=access_token, refresh_token=raw_refresh)
+    return login_resp
+
+
+@router.post(
+    "/refresh",
+    status_code=200,
+    summary="Rotate refresh token and issue new JWT cookies",
+    responses={
+        200: {"description": "Tokens rotated — new cookies set"},
+        401: {"description": "Invalid or expired refresh token"},
+    },
+)
+async def refresh(
+    response: Response,
+    user_repo: UserRepoDep,
+    rt_repo: RefreshTokenRepoDep,
+    refresh_token: str | None = Cookie(default=None),
+) -> dict:
+    """Rotate the refresh token cookie and issue a new access token.
+
+    Reads the ``refresh_token`` httpOnly cookie.  On success, replaces both
+    cookies with a new token pair.  Token reuse triggers family-wide revocation.
+    """
+    if not refresh_token:
+        raise UnauthorizedError("Invalid or expired refresh token.")
+    settings = get_settings()
+    service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key)
+    new_access, new_refresh = await service.refresh_tokens(refresh_token)
+    set_auth_cookies(response, access_token=new_access, refresh_token=new_refresh)
+    return {"message": "Token refreshed"}
+
+
+@router.post(
+    "/logout",
+    status_code=200,
+    summary="Revoke refresh token and clear auth cookies",
+    responses={
+        200: {"description": "Logged out — cookies cleared"},
+    },
+)
+async def logout(
+    response: Response,
+    user_repo: UserRepoDep,
+    rt_repo: RefreshTokenRepoDep,
+    refresh_token: str | None = Cookie(default=None),
+) -> dict:
+    """Revoke the current refresh token and clear both auth cookies."""
+    if refresh_token:
+        settings = get_settings()
+        service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key)
+        await service.logout(refresh_token)
+    clear_auth_cookies(response)
+    return {"message": "Logged out"}
