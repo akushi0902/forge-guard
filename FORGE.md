@@ -231,3 +231,10 @@
 - **Files:** 9 (+1156/-61)
 - **Duration:** 465ss
 - **Approach:** Extended the WO-021 permissions.py with the canonical 10-constant Permissions class and updated ROLE_PERMISSIONS to the WO-026 architecture matrix. The conditional exception.approve permission (security→security_reviewer, policy→tech_lead, both→platform_admin) is handled separately in RBACService.check_conditional_permission rather than polluting the static matrix. PermissionDeniedError extends ForbiddenError with required_roles so the error handler can include it in the 403 body. The require_permission / require_any_permission FastAPI dependency factories read request.state.user_role (set by the JWT/auth middleware) and delegate to RBACService — never failing open. The 403 message format follows AC5 verbatim. Tests include a 60-cell parametrized matrix test, RBACService edge cases, conditional permission routing, dependency tests, and integration HTTP tests with a role-injection middleware shim.
+
+## WO-030: User Story: WO-030 - Implement Immutable Audit Logging Service and Middleware
+- **Status:** completed
+- **Commit:** `8dfa973`
+- **Files:** 9 (+1188/-1)
+- **Duration:** 672ss
+- **Approach:** Built on existing AuditLog model (WO-007), AuditLogRepository (append-only, WO-007), and AuditPreHookMiddleware (WO-019). Added an AuditService wrapping the repository with IP masking, JSONB 1MB truncation, and UUID generation. A new AuditWriterMiddleware (post-hook) reads the AuditContext attached by AuditPreHookMiddleware after a successful 2xx response and persists the record via asyncio.shield to prevent cancellation mid-write. A third independent immutability layer is added via a PostgreSQL BEFORE UPDATE/DELETE trigger (migration 0007) that rejects all modification attempts at the DB level. The async service factory is injected at app creation time in main.py and resolves the connection pool lazily on first request.

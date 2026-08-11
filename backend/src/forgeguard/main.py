@@ -32,6 +32,7 @@ from forgeguard.api.routes.system import router as system_router
 from forgeguard.core.config import Settings, get_settings
 from forgeguard.core.error_handlers import register_error_handlers
 from forgeguard.core.logging import configure_logging
+from forgeguard.middleware.audit import AuditWriterMiddleware
 from forgeguard.middleware.audit_prehook import AuditPreHookMiddleware
 from forgeguard.middleware.logging import RequestLoggingMiddleware
 from forgeguard.middleware.metrics import MetricsMiddleware
@@ -118,8 +119,22 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------ #
     register_error_handlers(app)
 
+    # Build the audit service factory for the writer middleware.
+    # Uses a lazy import so the pool is resolved at request time (after lifespan).
+    async def _audit_service_factory():
+        from forgeguard.data.database import get_pool as _get_pool  # noqa: PLC0415
+        from forgeguard.data.repositories.audit_logs import AuditLogRepository  # noqa: PLC0415
+        from forgeguard.services.audit import AuditService  # noqa: PLC0415
+
+        pool = await _get_pool()
+        return AuditService(AuditLogRepository(pool))
+
     app.add_middleware(AuditPreHookMiddleware)      # registered 1st → innermost (pos 9)
-    app.add_middleware(MetricsMiddleware)           # registered 2nd → pos 6
+    app.add_middleware(                             # registered 2nd → pos 8
+        AuditWriterMiddleware,
+        audit_service_factory=_audit_service_factory,
+    )
+    app.add_middleware(MetricsMiddleware)           # registered 3rd → pos 6
     app.add_middleware(SecurityHeadersMiddleware)   # registered 3rd → pos 5
     app.add_middleware(                             # registered 4th → pos 4
         CORSMiddleware,
