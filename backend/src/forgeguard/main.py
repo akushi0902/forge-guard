@@ -23,9 +23,11 @@ import structlog
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from forgeguard.api.routes.system import router as system_router
 from forgeguard.core.config import Settings, get_settings
 from forgeguard.core.logging import configure_logging
 from forgeguard.middleware.logging import RequestLoggingMiddleware
+from forgeguard.middleware.metrics import MetricsMiddleware
 from forgeguard.middleware.request_id import RequestIDMiddleware
 
 logger = structlog.get_logger(__name__)
@@ -74,48 +76,38 @@ def create_app() -> FastAPI:
     # the LAST add_middleware call becomes the OUTERMOST layer (runs first).
     #
     # Desired order (outermost → innermost):
-    #   1. RequestIDMiddleware    — assigns UUID, clears stale context
+    #   1. RequestIDMiddleware      — assigns UUID, clears stale context
     #   2. RequestLoggingMiddleware — binds actor/resource/operation, logs lifecycle
-    #   3. … future middleware stages …
+    #   3. MetricsMiddleware        — records Prometheus counters & histograms
     #   4. Route handler
     #
-    # Therefore we register them innermost-first (LoggingMiddleware before
-    # RequestIDMiddleware).
+    # Therefore we register them innermost-first.
     # ------------------------------------------------------------------ #
-    app.add_middleware(RequestLoggingMiddleware)  # registered first → innermost
-    app.add_middleware(RequestIDMiddleware)       # registered second → outermost
+    app.add_middleware(MetricsMiddleware)           # registered first  → innermost
+    app.add_middleware(RequestLoggingMiddleware)    # registered second → middle
+    app.add_middleware(RequestIDMiddleware)         # registered third  → outermost
 
     # ------------------------------------------------------------------ #
-    # Health endpoints
-    # Both are intentionally unauthenticated liveness/readiness probes.
-    #
-    # GET /                  — root stub, kept for backward-compat
-    # GET /api/v1/health     — canonical health endpoint; Docker Compose
-    #                          health checks and Nginx probes use this path
+    # Routers
     # ------------------------------------------------------------------ #
-    def _health_body() -> dict[str, str]:
-        return {
-            "status": "ok",
-            "service": "forgeguard",
-            "version": settings.app_version,
-        }
 
-    @app.get("/", tags=["health"], summary="Root liveness probe")
+    # System observability endpoints: /health, /ready, /metrics
+    # Mounted at root (no prefix) for direct container access.
+    app.include_router(system_router)
+
+    # Also accessible at /api/v1/* for Nginx reverse-proxy path (/api/ → backend).
+    app.include_router(system_router, prefix="/api/v1", include_in_schema=False)
+
+    # Root stub retained for backward compatibility.
+    @app.get("/", tags=["system"], summary="Root liveness probe")
     async def root_health() -> JSONResponse:
-        """Minimal liveness probe at the application root."""
-        return JSONResponse(content=_health_body())
-
-    @app.get("/api/v1/health", tags=["health"], summary="API health probe")
-    async def api_health() -> JSONResponse:
-        """Canonical health endpoint accessible through the Nginx reverse proxy.
-
-        Docker Compose health checks use this path via the internal network:
-            curl -f http://forgeguard-backend:8000/api/v1/health
-
-        Through Nginx it is accessible at:
-            https://localhost/api/v1/health
-        """
-        return JSONResponse(content=_health_body())
+        return JSONResponse(
+            content={
+                "status": "ok",
+                "service": "forgeguard",
+                "version": settings.app_version,
+            }
+        )
 
     logger.info(
         "ForgeGuard application factory complete",

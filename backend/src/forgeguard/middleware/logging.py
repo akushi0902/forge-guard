@@ -21,6 +21,7 @@ lifecycle in any log aggregation system.
 from __future__ import annotations
 
 import time
+from typing import Any
 
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -29,15 +30,25 @@ from starlette.responses import Response
 
 logger = structlog.get_logger(__name__)
 
+# Paths excluded from audit logging — health/metrics probes must not flood logs.
+_DEFAULT_EXCLUDE_PATHS: frozenset[str] = frozenset({"/health", "/ready", "/metrics"})
+
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Bind request context to structlog and log request lifecycle events."""
+
+    def __init__(self, app: Any, exclude_paths: frozenset[str] = _DEFAULT_EXCLUDE_PATHS) -> None:  # type: ignore[override]
+        super().__init__(app)
+        self.exclude_paths = exclude_paths
 
     async def dispatch(
         self,
         request: Request,
         call_next: RequestResponseEndpoint,
     ) -> Response:
+        if request.url.path in self.exclude_paths:
+            return await call_next(request)
+
         # ---- Extract actor -----------------------------------------------
         # JWT auth middleware (a later stage) stores the decoded token claims
         # on request.state.user.  If that isn't set yet (unauthenticated or
