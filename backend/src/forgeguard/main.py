@@ -24,6 +24,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from forgeguard.api.routes.admin import router as admin_router
 from forgeguard.api.routes.system import router as system_router
 from forgeguard.core.config import Settings, get_settings
 from forgeguard.core.error_handlers import register_error_handlers
@@ -120,6 +121,9 @@ def create_app() -> FastAPI:
 
     # Also accessible at /api/v1/* for Nginx reverse-proxy path (/api/ → backend).
     app.include_router(system_router, prefix="/api/v1", include_in_schema=False)
+
+    # Admin endpoints: prompt template CRUD (requires Platform Admin role).
+    app.include_router(admin_router)
 
     # Root stub retained for backward compatibility.
     @app.get("/", tags=["system"], summary="Root liveness probe")

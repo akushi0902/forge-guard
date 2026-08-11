@@ -49,6 +49,7 @@ from forgeguard.data.models.audit import (  # noqa: E402, F401
     AIConversation,
     AuditLog,
 )
+from forgeguard.data.models.prompt_template import PromptTemplate  # noqa: E402, F401
 
 __all__ = [
     "AIConversation",
@@ -57,6 +58,7 @@ __all__ = [
     "Permission",
     "Policy",
     "PolicyRule",
+    "PromptTemplate",
     "RefreshToken",
     "Role",
     "RolePermission",
