@@ -36,9 +36,8 @@ coverage.xml
 .mypy_cache/
 .dmypy.json
 
-# Alembic
-backend/alembic/versions/*.py
-!backend/alembic/versions/.gitkeep
+# Alembic — migration version files must be committed; exclude only scratch files
+# (no exclusion of .py files here — Alembic migrations are version-controlled)
 
 # IDE / editor
 .vscode/

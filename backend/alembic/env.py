@@ -42,12 +42,19 @@ NAMING_CONVENTION: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# MetaData — will be populated once ORM models are defined.
+# MetaData — populated from the ORM model registry.
 # ---------------------------------------------------------------------------
-# from sqlalchemy import MetaData
-# from forgeguard.data.models import Base
-# target_metadata = Base.metadata
-target_metadata = None  # Updated once models exist
+try:
+    from forgeguard.data.models import Base  # noqa: PLC0415
+
+    target_metadata = Base.metadata
+except Exception:
+    logger.warning(
+        "Could not import Base from forgeguard.data.models; "
+        "autogenerate will not detect model changes. "
+        "Ensure PYTHONPATH includes src/ and dependencies are installed.",
+    )
+    target_metadata = None
 
 # ---------------------------------------------------------------------------
 # Dynamic DATABASE_URL from application settings
