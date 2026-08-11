@@ -23,6 +23,7 @@ export interface User {
   email: string;
   displayName: string;
   role: Role;
+  permissions: string[];
   createdAt: string;
 }
 

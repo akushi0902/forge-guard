@@ -5,7 +5,7 @@
  * fetch and is consumed by TanStack Query hooks.
  */
 
-import { getAccessToken } from '@/stores/auth';
+import { getCsrfToken } from '@/stores/auth-store';
 import { ApiError, NetworkError, ParseError } from '@/types/errors';
 
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -54,7 +54,7 @@ export async function apiClient<T>(
   headers.set('Accept', 'application/json');
 
   if (MUTATION_METHODS.has(method)) {
-    const token = getAccessToken();
+    const token = getCsrfToken();
     if (token) {
       headers.set('X-CSRF-Token', token);
     }

@@ -1,6 +1,8 @@
 import { type JSX } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 
+import { LoginPage } from '@/pages/LoginPage';
+
 // --------------------------------------------------------------------------
 // Placeholder page components
 //
@@ -78,6 +80,10 @@ function NotFoundPage(): JSX.Element {
 
 const routes: RouteObject[] = [
   {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
     path: '/',
     element: <DashboardPage />,
   },
@@ -119,3 +125,4 @@ export {
   SecurityReviewPage,
   ServiceHealthPage,
 };
+export { LoginPage } from '@/pages/LoginPage';

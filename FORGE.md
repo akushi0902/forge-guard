@@ -322,3 +322,10 @@
 - **Files:** 10 (+1596/-0)
 - **Duration:** 936ss
 - **Approach:** Added RiskFinding/RiskSeverity/RiskDimension/FindingSource Pydantic models to models.py. Created PromptLoader (startup caching, str.format_map with SafeFormatDict for missing-key safety) and three .txt prompt templates. ExplanationGenerator collects candidates from dimension scores (score > threshold=40) and top-5 contributing factors, deduplicates in two passes (dimension+metric then cross-dimension metric), calls AIEngineService.generate_completion with asyncio.wait_for(5s) per finding concurrently via asyncio.gather, parses JSON response, falls back to template text on timeout/exception. FindingRepository already existed; created RemediationRecommendationRepository. Added migration to expand findings.dimension CHECK constraint to include release_guardian dimension values.
+
+## WO-069: User Story: WO-069 - Implement JWT Authentication Flow with Token Refresh
+- **Status:** completed
+- **Commit:** `5be8ab2`
+- **Files:** 13 (+1355/-2)
+- **Duration:** 756ss
+- **Approach:** Implemented JWT authentication flow with httpOnly cookie storage, CSRF token management, and automatic token refresh. Created a Zustand auth store that persists only non-sensitive user profile data to sessionStorage (never tokens or CSRF). The refresh interceptor uses a module-level refreshPromise to deduplicate concurrent 401 responses so exactly one refresh is issued for N concurrent failures. LoginPage uses Mantine useForm for validation with role-appropriate redirect on success. MSW handlers cover all auth endpoints including lockout (429) and expired refresh (401).
