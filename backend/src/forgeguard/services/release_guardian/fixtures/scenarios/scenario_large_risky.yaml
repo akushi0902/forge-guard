@@ -1,0 +1,101 @@
+name: large_risky_change
+description: "Large risky change: 50 files modified, high complexity, no new tests"
+
+commit_sha: "def456abc789def456abc789def456abc789def4"
+pr_reference: "99"
+
+files:
+  - filename: "src/payments/processor.py"
+    status: modified
+    additions: 120
+    deletions: 80
+    is_binary: false
+    patch: |
+      @@ -1,80 +1,120 @@
+      +def process_payment(amount, currency, method, retry=True):
+      +    if amount > 0:
+      +        if method == "card":
+      +            if retry:
+      +                for i in range(3):
+      +                    try:
+      +                        result = charge_card(amount)
+      +                        if result:
+      +                            return result
+      +                        else:
+      +                            continue
+      +                    except TimeoutError:
+      +                        if i < 2:
+      +                            continue
+      +                        else:
+      +                            raise
+      +            elif not retry:
+      +                return charge_card(amount)
+      +    elif amount == 0:
+      +        return None
+      +    else:
+      +        raise ValueError("Invalid amount")
+
+  - filename: "src/payments/refunds.py"
+    status: modified
+    additions: 90
+    deletions: 30
+    is_binary: false
+    patch: |
+      @@ -1,30 +1,90 @@
+      +def process_refund(payment_id, amount=None):
+      +    if payment_id:
+      +        if amount and amount > 0:
+      +            for attempt in range(3):
+      +                try:
+      +                    result = refund_charge(payment_id, amount)
+      +                    while not result.settled:
+      +                        result = poll_refund(result.id)
+      +                    return result
+      +                except Exception as e:
+      +                    if attempt == 2:
+      +                        raise
+
+  - filename: "src/payments/webhooks.py"
+    status: added
+    additions: 200
+    deletions: 0
+    is_binary: false
+    patch: |
+      @@ -0,0 +1,200 @@
+      +class WebhookProcessor:
+      +    def process(self, event):
+      +        if event.type == "payment_intent.succeeded":
+      +            if event.data.amount > 0:
+      +                try:
+      +                    self.handle_success(event)
+      +                except Exception:
+      +                    pass
+      +        elif event.type == "payment_intent.failed":
+      +            for handler in self.failure_handlers:
+      +                try:
+      +                    handler(event)
+      +                except Exception:
+      +                    continue
+
+  - filename: "src/payments/models.py"
+    status: modified
+    additions: 60
+    deletions: 20
+    is_binary: false
+    patch: ""
+
+  - filename: "src/payments/views.py"
+    status: modified
+    additions: 75
+    deletions: 40
+    is_binary: false
+    patch: ""
+
+  - filename: "src/payments/serializers.py"
+    status: modified
+    additions: 45
+    deletions: 15
+    is_binary: false
+    patch: ""
+
+dependency_manifests: []

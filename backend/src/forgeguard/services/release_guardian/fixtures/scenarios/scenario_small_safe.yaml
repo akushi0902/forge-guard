@@ -1,0 +1,37 @@
+name: small_safe_change
+description: "Small safe change: 2 files modified, no dependency changes, tests included"
+
+commit_sha: "abc123def456abc123def456abc123def456abc1"
+pr_reference: "42"
+
+files:
+  - filename: "src/payments/processor.py"
+    status: modified
+    additions: 12
+    deletions: 4
+    is_binary: false
+    patch: |
+      @@ -10,4 +10,12 @@
+      -def process_payment(amount):
+      -    return charge(amount)
+      +def process_payment(amount, currency="USD"):
+      +    if amount <= 0:
+      +        raise ValueError("Amount must be positive")
+      +    return charge(amount, currency)
+
+  - filename: "tests/test_processor.py"
+    status: modified
+    additions: 18
+    deletions: 2
+    is_binary: false
+    patch: |
+      @@ -5,2 +5,18 @@
+      +def test_process_payment_positive():
+      +    result = process_payment(100)
+      +    assert result is not None
+      +
+      +def test_process_payment_negative_raises():
+      +    with pytest.raises(ValueError):
+      +        process_payment(-1)
+
+dependency_manifests: []
