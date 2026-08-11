@@ -175,3 +175,10 @@
 - **Files:** 5 (+1080/-0)
 - **Duration:** 366ss
 - **Approach:** Created two SQLAlchemy 2.0 ORM models in a new remediation.py module using Mapped/mapped_column style. RemediationRecommendation uses ON DELETE CASCADE from findings (recommendations are owned by the finding). FindingException (Python class name avoids shadowing built-in Exception; table name is 'exceptions') uses ON DELETE RESTRICT to preserve the audit trail. All categorical columns use VARCHAR + CHECK constraints. DECIMAL(3,2) for confidence_score (0.00-1.00 scale, distinct from 0-100 health scores). expires_at and justification are NOT NULL per business rules. Alembic migration chains from e5f6a7b8c9d0 (assessments schema) to f6a7b8c9d0e1.
+
+## WO-100: User Story: WO-100 - PII Masking Validation Test Suite
+- **Status:** completed
+- **Commit:** `aa55a77`
+- **Files:** 2 (+873/-0)
+- **Duration:** 424ss
+- **Approach:** Created two test files providing automated GDPR/CCPA compliance evidence for PII masking. test_masking_function.py is a focused parametrized unit test file with exact input/output pairs from the WO spec, Faker-generated PII tests, boundary IP values (0.0.0.0, 255.255.255.255), determinism proofs, and negative tests. test_pii_masking.py is the compliance integration test using the _LogCapture pattern (same pattern as existing test_pii_middleware.py) that reconfigures structlog with pii_filter_processor and a capturing processor, then verifies all acceptance criteria. No existing files were modified — both files build on the existing utils/pii_masking.py and middleware/pii_filter.py from WO-033.
