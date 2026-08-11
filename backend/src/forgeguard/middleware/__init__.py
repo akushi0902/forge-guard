@@ -3,11 +3,14 @@
 Middleware is applied in the order it is registered on the FastAPI application.
 The full middleware chain is defined in ``forgeguard.main.create_app``.
 
-Planned middleware modules:
-    request_id   — Assigns a UUID v4 correlation ID to every request
-    logging      — Attaches request context to structlog bound variables
-    rate_limiter — Token-bucket rate limiting per IP address
-    cors         — CORS origin validation
-    pii_filter   — Masks sensitive fields in request/response logs
-    audit        — Pre-hook capturing before-state for mutation requests
+Pipeline order (outermost → innermost, i.e. last registered → first registered):
+    1. RequestIDMiddleware       — assigns UUID v4 correlation ID, clears stale context
+    2. RequestLoggingMiddleware  — binds actor/resource/operation, logs lifecycle
+    3. RateLimiterMiddleware     — token-bucket rate limiting per IP address
+    4. CORSMiddleware            — CORS headers, pre-flight handling
+    5. SecurityHeadersMiddleware — injects 7 security headers on all responses
+    6. MetricsMiddleware         — records Prometheus counters and histograms
+    7. (future) PiiFilterMiddleware — masks PII in request/response bodies
+    8. (future) AuthMiddleware   — JWT validation, sets request.state.user
+    9. AuditPreHookMiddleware    — captures before-state for mutation requests
 """

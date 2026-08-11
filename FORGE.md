@@ -210,3 +210,10 @@
 - **Files:** 9 (+1609/-0)
 - **Duration:** 857ss
 - **Approach:** Implemented a modular seed data system split across five domain fixture files (users, services, policies, assessments, remediation) and a central async seed() orchestrator. All inserts use ON CONFLICT DO NOTHING with stable fixed UUIDs for full idempotency. bcrypt cost-12 password hash computed at module import time (not build time). An Alembic data migration (revision a7b8c9d0e1f2) wraps the seed() call for migration-driven deployment. Integration tests verify all 10 acceptance criteria.
+
+## WO-019: User Story: WO-019 - Implement Audit Pre-hook Mutation Capture Middleware
+- **Status:** completed
+- **Commit:** `7876b77`
+- **Files:** 8 (+1056/-19)
+- **Duration:** 596ss
+- **Approach:** Implemented AuditPreHookMiddleware as the innermost layer (registered first in FastAPI's reversed middleware stack). The middleware intercepts POST/PUT/PATCH/DELETE requests, extracts the client IP from X-Forwarded-For (leftmost) or ASGI scope, masks it via a dedicated core/ip_masking.py module, parses resource_type and resource_id from the /api/v1/ path prefix, fetches before-state via an injected BeforeStateRepository factory with a 500ms asyncio.wait_for timeout, and attaches a frozen AuditContext Pydantic model to request.state.audit_context. All exceptions during before-state capture are caught and logged as structured warnings — the request is never blocked. GET and OPTIONS pass through immediately with no context set. The BeforeStateRepository is a typing.Protocol enabling clean mock injection in tests without coupling to any concrete implementation.
