@@ -280,3 +280,10 @@
 - **Files:** 16 (+1832/-1)
 - **Duration:** 1023ss
 - **Approach:** Implemented a deterministic four-dimension risk scoring pipeline. Each dimension (code_complexity, coverage, dependencies, security) has a dedicated scorer that maps Pydantic metrics to a 0-100 integer using bucket thresholds. RiskScorer orchestrates them with configurable weights (default 0.25 each), uses Decimal arithmetic with ROUND_HALF_UP to avoid float drift, clamps the result to [0,100], and enforces a critical security floor of 70 when secrets are detected. The assessment_scores table was already present (WO-009); a thin AssessmentScoreRepository wrapper was added. Ten pre-computed regression fixtures plus boundary-value unit tests guard the algorithm against accidental drift.
+
+## WO-057: User Story: WO-057 - Add Visual Simulation Indicators to Demo Responses
+- **Status:** completed
+- **Commit:** `ceb0495`
+- **Files:** 9 (+651/-1)
+- **Duration:** 503ss
+- **Approach:** Added three simulation indicator fields (is_simulated, data_classification, simulation_disclaimer) to all four demo endpoint response schemas. Created a single-source constants module (constants/demo.py) with SIMULATION_DISCLAIMER and DATA_CLASSIFICATION_SIMULATED to prevent text drift. The generic DemoResponseEnvelope[T] provides a programmatic wrapping utility. All three response models (TransactionResponse, PaymentServiceInfoResponse, ResetResponse) were extended with data_classification and simulation_disclaimer using defaults from the constants — TransactionResponse already had is_simulated=True from WO-054. A ServiceResponse schema with is_demo: bool was added for future service listing endpoints. A demo_indicator service helper provides both sync (known-demo) and async (DB-lookup) enrichment paths.

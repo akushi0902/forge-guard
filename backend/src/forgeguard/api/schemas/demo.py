@@ -6,9 +6,11 @@ import re
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from forgeguard.constants.demo import DATA_CLASSIFICATION_SIMULATED, SIMULATION_DISCLAIMER
 
 # Commonly used ISO 4217 currency codes accepted by the mock service.
 _ISO_4217_CODES: frozenset[str] = frozenset({
@@ -106,6 +108,8 @@ class TransactionResponse(BaseModel):
     status: str
     authorization_code: Optional[str] = None
     is_simulated: bool = True
+    data_classification: Literal["simulated"] = DATA_CLASSIFICATION_SIMULATED
+    simulation_disclaimer: str = SIMULATION_DISCLAIMER
     created_at: datetime
 
 
@@ -128,6 +132,9 @@ class PaymentServiceInfoResponse(BaseModel):
     capabilities: List[str]
     health_score: Optional[float] = None
     last_evaluated: Optional[datetime] = None
+    is_simulated: bool = True
+    data_classification: Literal["simulated"] = DATA_CLASSIFICATION_SIMULATED
+    simulation_disclaimer: str = SIMULATION_DISCLAIMER
 
 
 class ResetResponse(BaseModel):
@@ -143,3 +150,6 @@ class ResetResponse(BaseModel):
     purged_count: int
     message: str
     reset_at: datetime
+    is_simulated: bool = True
+    data_classification: Literal["simulated"] = DATA_CLASSIFICATION_SIMULATED
+    simulation_disclaimer: str = SIMULATION_DISCLAIMER
