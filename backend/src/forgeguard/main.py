@@ -30,6 +30,7 @@ from forgeguard.api.routes.auth import router as auth_router
 from forgeguard.api.routes.data_subject import router as data_subject_router
 from forgeguard.api.routes.demo import router as demo_router
 from forgeguard.api.routes.platform import router as platform_router
+from forgeguard.api.routes.releases import router as releases_router
 from forgeguard.api.routes.system import router as system_router
 from forgeguard.core.config import Settings, get_settings
 from forgeguard.core.error_handlers import register_error_handlers
@@ -195,6 +196,9 @@ def create_app() -> FastAPI:
 
     # Demo mock Payment Service endpoints.
     app.include_router(demo_router)
+
+    # Release Assessment endpoints (WO-048).
+    app.include_router(releases_router)
 
     # Root stub retained for backward compatibility.
     @app.get("/", tags=["system"], summary="Root liveness probe")

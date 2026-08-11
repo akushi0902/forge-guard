@@ -80,6 +80,27 @@ class AssessmentScoreRepository(ScoreRepository):
             )
             raise
 
+    async def get_by_assessment_id(
+        self,
+        assessment_id: uuid.UUID,
+    ) -> dict[str, Any] | None:
+        """Return the risk score row for a specific assessment.
+
+        Args:
+            assessment_id: UUID of the assessment.
+
+        Returns:
+            The score row as a dict, or None if not found.
+        """
+        q = (
+            "SELECT * FROM assessment_scores "
+            "WHERE assessment_id = $1 AND score_type = 'risk' "
+            "ORDER BY created_at DESC LIMIT 1"
+        )
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(q, assessment_id)
+        return self._row(row)
+
     async def get_latest_risk_score(
         self,
         service_id: uuid.UUID,

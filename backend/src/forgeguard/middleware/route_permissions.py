@@ -126,10 +126,12 @@ ROUTE_PERMISSION_MAP: list[RoutePermission] = [
     # ------------------------------------------------------------------
     # Releases
     # ------------------------------------------------------------------
-    RoutePermission("GET",  "/api/v1/releases",           [Permissions.SERVICE_VIEW]),
-    RoutePermission("GET",  "/api/v1/releases/*",         [Permissions.SERVICE_VIEW]),
-    RoutePermission("POST", "/api/v1/releases/*/approve", [Permissions.RELEASE_APPROVE]),
-    RoutePermission("POST", "/api/v1/releases/*/block",   [Permissions.RELEASE_BLOCK]),
+    RoutePermission("GET",  "/api/v1/releases",              [Permissions.SERVICE_VIEW]),
+    RoutePermission("GET",  "/api/v1/releases/*",            [Permissions.SERVICE_VIEW]),
+    # Exact path /assess must appear before wildcard patterns (first-match wins).
+    RoutePermission("POST", "/api/v1/releases/assess",       [Permissions.ASSESSMENT_REQUEST]),
+    RoutePermission("POST", "/api/v1/releases/*/approve",    [Permissions.RELEASE_APPROVE]),
+    RoutePermission("POST", "/api/v1/releases/*/block",      [Permissions.RELEASE_BLOCK]),
 
     # ------------------------------------------------------------------
     # Exception requests and approvals

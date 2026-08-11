@@ -147,6 +147,48 @@ class ReleaseAssessmentRepository(BaseRepository):
             },
         )
 
+    async def list_page(
+        self,
+        *,
+        service_id: Optional[str | uuid.UUID] = None,
+        status: Optional[str] = None,
+        before_created_at: Optional[Any] = None,
+        before_id: Optional[str | uuid.UUID] = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return assessments ordered by created_at DESC with proper cursor pagination.
+
+        When both before_created_at and before_id are provided the query uses a
+        composite keyset predicate: rows whose (created_at, id) is strictly before
+        the cursor position (i.e. older or same-timestamp-but-earlier-id).
+        """
+        params: list[Any] = []
+        idx = 1
+        q = "SELECT * FROM release_assessments WHERE TRUE"
+
+        if service_id is not None:
+            q += f" AND service_id = ${idx}"
+            params.append(uuid.UUID(str(service_id)))
+            idx += 1
+        if status is not None:
+            q += f" AND status = ${idx}"
+            params.append(status)
+            idx += 1
+        if before_created_at is not None and before_id is not None:
+            q += (
+                f" AND (created_at < ${idx}"
+                f" OR (created_at = ${idx} AND id < ${idx + 1}))"
+            )
+            params.append(before_created_at)
+            params.append(uuid.UUID(str(before_id)))
+            idx += 2
+
+        q += f" ORDER BY created_at DESC, id DESC LIMIT ${idx}"
+        params.append(limit)
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(q, *params)
+        return self._rows(rows)
+
     @staticmethod
     def _normalize_jsonb(data: dict[str, Any]) -> dict[str, Any]:
         """Serialize dict values in change_analysis to JSON strings for asyncpg."""

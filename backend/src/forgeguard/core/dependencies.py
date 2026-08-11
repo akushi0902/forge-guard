@@ -190,6 +190,31 @@ async def get_data_subject_service(
     return DataSubjectService(pool, audit_service)
 
 
+# ------------------------------------------------------------------
+# Release Guardian service factories
+# ------------------------------------------------------------------
+
+
+async def get_release_assessment_repo(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    from forgeguard.data.repositories.release_assessment_repository import (  # noqa: PLC0415
+        ReleaseAssessmentRepository,
+    )
+
+    return ReleaseAssessmentRepository(pool)
+
+
+async def get_assessment_score_repo(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    from forgeguard.data.repositories.assessment_score_repository import (  # noqa: PLC0415
+        AssessmentScoreRepository,
+    )
+
+    return AssessmentScoreRepository(pool)
+
+
 __all__ = [
     "SettingsDep",
     "get_settings",
@@ -206,4 +231,6 @@ __all__ = [
     "get_demo_transaction_repository",
     "get_demo_app_service",
     "get_data_subject_service",
+    "get_release_assessment_repo",
+    "get_assessment_score_repo",
 ]

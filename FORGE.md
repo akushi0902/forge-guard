@@ -336,3 +336,10 @@
 - **Files:** 5 (+945/-16)
 - **Duration:** 583ss
 - **Approach:** Implemented RBAC middleware as a pure ASGI class at pipeline position 6 (after AuthenticationMiddleware at pos 5, before CSRFMiddleware at pos 7). Route-permission mapping is separated into route_permissions.py for maintainability — each entry is a RoutePermission dataclass whose path_pattern is compiled to a regex at instantiation time (O(1) per-request matching). Wildcard patterns: * matches one path segment ([^/]+) and ** matches multiple segments (.+). The middleware enforces deny-by-default: any unmapped non-public route returns 403 with a 'not configured' message logged at WARN. HEAD requests inherit GET permissions. Missing user_role (auth middleware not run) returns 401 instead of 403.
+
+## WO-048: User Story: WO-048 - Release Assessment REST API Endpoints
+- **Status:** completed
+- **Commit:** `7d88e36`
+- **Files:** 10 (+1738/-4)
+- **Duration:** 863ss
+- **Approach:** Implemented three REST endpoints for the Release Guardian pipeline using FastAPI BackgroundTasks for async execution. POST /assess returns 202 within the request cycle; the pipeline (ChangeAnalyzer→RiskScorer→ExplanationGenerator) runs in a background task with a 5-minute asyncio timeout. Risk scores are stored in assessment_scores via AssessmentScoreRepository; findings and change analysis are stored as JSONB in release_assessments.change_analysis. Cursor-based pagination uses base64-encoded (created_at|id) composite keys. RBAC is enforced at both middleware level (route_permissions.py) and route level (require_permission Depends). Audit events are written for every POST and every pipeline completion/failure.
