@@ -25,14 +25,16 @@ from __future__ import annotations
 
 import time
 from collections import deque
+from typing import Any
 
 import structlog
 
 from .cache import ResponseCache
 from .circuit_breaker import CircuitBreaker
 from .errors import CircuitOpenError
-from .models import HealthStatus, LLMResponse
+from .models import HealthStatus, LLMResponse, ResponseSource
 from .provider import LLMProvider
+from .template_engine import TemplateEngine
 
 logger = structlog.get_logger(__name__)
 
@@ -57,10 +59,12 @@ class AIEngineService:
         provider: LLMProvider,
         circuit_breaker: CircuitBreaker,
         cache: ResponseCache,
+        template_engine: TemplateEngine | None = None,
     ) -> None:
         self._provider = provider
         self._cb = circuit_breaker
         self._cache = cache
+        self._template_engine = template_engine
         self._recent_latencies: deque[float] = deque(maxlen=_LATENCY_WINDOW)
         self._request_count: int = 0
         self._error_count: int = 0
@@ -112,6 +116,9 @@ class AIEngineService:
                 operation="generate_completion",
                 circuit_state=self._cb.state.value,
             )
+            template_response = self._try_template_fallback(params or {})
+            if template_response is not None:
+                return template_response
             raise
         except Exception:
             self._error_count += 1
@@ -161,6 +168,53 @@ class AIEngineService:
         self._recent_latencies.append(latency_ms)
         self._cache.set(prompt, cache_params, response)
         return response
+
+    # ------------------------------------------------------------------
+    # Template fallback helper
+    # ------------------------------------------------------------------
+
+    def _try_template_fallback(self, params: dict[str, Any]) -> LLMResponse | None:
+        """Attempt to return a template-generated response.
+
+        Returns ``None`` if no template engine is configured, allowing the
+        caller to re-raise the original :class:`CircuitOpenError`.
+        """
+        if self._template_engine is None:
+            return None
+
+        finding_type = params.get("finding_type", "unknown")
+        dimension = params.get("dimension", "generic")
+        severity = params.get("severity", "medium")
+
+        context_vars = {
+            k: v for k, v in params.items()
+            if k not in {"finding_type", "dimension", "severity"}
+        }
+
+        try:
+            tpl_resp = self._template_engine.get_template(
+                finding_type=finding_type,
+                dimension=dimension,
+                severity=severity,
+                context_vars=context_vars or None,
+            )
+        except Exception as exc:
+            logger.error(
+                "template_fallback_failed",
+                finding_type=finding_type,
+                dimension=dimension,
+                error=str(exc),
+            )
+            return None
+
+        return LLMResponse(
+            content=tpl_resp.explanation_text,
+            confidence_score=tpl_resp.confidence_score,
+            source=ResponseSource.TEMPLATE_GENERATED,
+            latency_ms=0,
+            model="template-engine",
+            token_usage={},
+        )
 
     async def health_check(self) -> HealthStatus:
         """Return aggregated health metrics for the monitoring dashboard."""

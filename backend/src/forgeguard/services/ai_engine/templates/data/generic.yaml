@@ -1,0 +1,25 @@
+# Generic Fallback Template
+# Used when no finding-type-specific template exists.
+# Provides dimension-aware but finding-type-agnostic guidance.
+
+templates:
+  - finding_type: generic_fallback
+    dimension: generic
+    severity_levels:
+      - any
+    explanation_template: >
+      A {severity} risk finding ({finding_title}) was identified in {service_name} as part of
+      {pr_reference}. This finding falls under the {dimension} risk dimension.
+      Detailed AI-generated analysis is temporarily unavailable; this response is based on
+      structured template guidance for the {dimension} risk area.
+    business_impact_template: >
+      Risk findings in the {dimension} category can affect the stability, security, or
+      maintainability of {service_name}. The impact of {finding_title} depends on the specific
+      context of the change in {pr_reference} and should be evaluated by the responsible
+      engineering team.
+    remediation_steps:
+      - "Review {finding_title} in {pr_reference} in the context of the {dimension} risk dimension."
+      - "Consult your team's engineering standards and runbooks for guidance specific to {dimension} risks in {service_name}."
+      - "Ensure that at least one experienced reviewer familiar with {service_name} has approved {pr_reference}."
+      - "If the severity is high or critical, consider whether a rollback or temporary mitigation is needed."
+      - "Document any accepted risk or planned follow-up work in the {pr_reference} description."

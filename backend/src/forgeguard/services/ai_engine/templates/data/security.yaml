@@ -1,0 +1,117 @@
+# Security Finding Templates
+# Covers the 4 most common security-related findings
+# All code examples are safe and educational — no real exploit code.
+
+templates:
+  - finding_type: secrets_in_code
+    dimension: security
+    severity_levels:
+      - high
+      - critical
+    explanation_template: >
+      A potential secret or credential was detected in {finding_title} within {service_name}
+      as part of {pr_reference}. Hardcoded secrets in source code are exposed to anyone with
+      read access to the repository, including current and former contributors, CI systems,
+      and — in the case of public repositories — the internet.
+    business_impact_template: >
+      Exposed credentials in {service_name} may allow unauthorised access to production systems,
+      cloud infrastructure, or third-party services. Even if the credential is rotated, its
+      historical presence in git commits means it can still be recovered by anyone who cloned
+      the repository before rotation.
+    remediation_steps:
+      - "Immediately rotate the exposed credential — treat it as compromised regardless of repository visibility."
+      - "Remove the secret from {finding_title} and all git history using a tool like `git filter-repo` or BFG Repo Cleaner."
+      - "Store the credential in a secret manager (e.g. AWS Secrets Manager, HashiCorp Vault, environment variables injected at runtime)."
+      - "Add the secret pattern to your `.gitignore` or a pre-commit hook (e.g. detect-secrets, gitleaks) to prevent future leaks."
+      - "Audit git log for any other occurrences of the credential pattern across the full repository history."
+    code_examples:
+      - |
+        # Unsafe: hardcoded credential in source
+        # API_KEY = "sk-live-abc123..."  <-- do not do this
+
+        # Safe: load from environment at runtime
+        import os
+        API_KEY = os.environ["API_KEY"]  # set via secrets manager or CI env var
+
+  - finding_type: sql_injection_risk
+    dimension: security
+    severity_levels:
+      - high
+      - critical
+    explanation_template: >
+      {finding_title} in {service_name} constructs a SQL query using string concatenation or
+      f-strings with user-supplied input, as detected in {pr_reference}. SQL injection allows
+      an attacker to alter the intended query structure, potentially reading arbitrary data,
+      bypassing authentication, or destroying data.
+    business_impact_template: >
+      SQL injection in {service_name} is one of the highest-impact vulnerability classes.
+      Exploitation can result in full database exfiltration, data destruction, authentication
+      bypass, and regulatory penalties under GDPR, HIPAA, or PCI DSS, depending on the data
+      involved.
+    remediation_steps:
+      - "Replace all string-based query construction in {finding_title} with parameterised queries or an ORM."
+      - "Never pass user-controlled values directly into a query string — always use bound parameters."
+      - "Review all other query construction sites in {service_name} for similar patterns."
+      - "Add integration tests that attempt common SQL injection payloads against the affected endpoint."
+      - "Consider enabling a WAF rule for SQL injection patterns as a defence-in-depth measure."
+    code_examples:
+      - |
+        # Unsafe: user input concatenated into SQL (never do this)
+        # query = f"SELECT * FROM users WHERE name = '{user_input}'"
+
+        # Safe: parameterised query (SQLAlchemy example)
+        from sqlalchemy import text
+        query = text("SELECT * FROM users WHERE name = :name")
+        result = await session.execute(query, {"name": user_input})
+
+  - finding_type: xss_risk
+    dimension: security
+    severity_levels:
+      - medium
+      - high
+    explanation_template: >
+      {finding_title} in {service_name} renders user-supplied content into an HTML response
+      without escaping, as detected in {pr_reference}. Cross-site scripting (XSS) allows an
+      attacker to inject JavaScript that executes in the victim's browser, enabling session
+      hijacking, credential theft, or UI manipulation.
+    business_impact_template: >
+      XSS vulnerabilities in {service_name} can be used to steal authentication tokens, perform
+      actions on behalf of users without consent, and undermine trust in the product. Stored XSS
+      affecting many users is particularly impactful and may trigger breach notification obligations.
+    remediation_steps:
+      - "Escape all user-supplied content before rendering it in {finding_title} — use your framework's built-in auto-escaping."
+      - "Set a strict Content Security Policy (CSP) header to prevent inline script execution."
+      - "Validate and sanitise rich text input server-side before storage using an allowlist-based HTML sanitiser."
+      - "Avoid using `innerHTML`, `dangerouslySetInnerHTML`, or equivalent raw-HTML injection APIs with untrusted content."
+      - "Add tests that submit common XSS payloads (e.g. `<script>alert(1)</script>`) and verify they are escaped in the response."
+    code_examples:
+      - |
+        # Unsafe: raw HTML from user input (never do this)
+        # return f"<div>{user_comment}</div>"
+
+        # Safe: escape before rendering (Python example using markupsafe)
+        from markupsafe import escape
+        safe_comment = escape(user_comment)
+        return f"<div>{safe_comment}</div>"
+
+  - finding_type: insecure_configuration
+    dimension: security
+    severity_levels:
+      - medium
+      - high
+      - critical
+    explanation_template: >
+      A security-sensitive configuration in {service_name} appears to be set to an insecure value
+      in {finding_title} within {pr_reference}. Insecure configuration — such as disabled TLS
+      verification, overly permissive CORS, debug mode enabled in production, or weak cryptographic
+      settings — can undermine otherwise secure code.
+    business_impact_template: >
+      Insecure configuration in {service_name} creates vulnerabilities that are unrelated to the
+      application logic and may be overlooked in code review. Misconfigured TLS, authentication,
+      or session settings are routinely exploited by automated scanners and targeted attackers alike.
+    remediation_steps:
+      - "Review the configuration change in {finding_title} and confirm it is intentional and appropriate for the target environment."
+      - "Ensure that debug or development configuration is never shipped to production — use environment-specific config profiles."
+      - "Verify that TLS verification is enabled for all outbound HTTP connections in {service_name}."
+      - "Check CORS origin allowlists to ensure they do not permit untrusted origins."
+      - "Run a configuration security scanner (e.g. Bandit for Python, Semgrep) against {service_name} to catch similar patterns."

@@ -22,6 +22,7 @@ dependencies = [
     "structlog>=24.0",
     "prometheus-client>=0.20",
     "cryptography>=42.0",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]

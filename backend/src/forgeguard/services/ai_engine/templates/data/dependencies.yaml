@@ -1,0 +1,86 @@
+# Dependency Finding Templates
+# Covers the 4 most common dependency-related findings
+
+templates:
+  - finding_type: known_cve
+    dimension: dependencies
+    severity_levels:
+      - medium
+      - high
+      - critical
+    explanation_template: >
+      A dependency used by {service_name} has a known CVE ({finding_title}) with severity {severity}.
+      The current version ({actual_value}) is below the patched version ({threshold_value}).
+      This vulnerability may expose {service_name} to attack if the vulnerable code path is reachable
+      from user-controlled input.
+    business_impact_template: >
+      Known CVEs in {service_name} dependencies create direct regulatory and contractual exposure.
+      Depending on the vulnerability class, this may trigger mandatory disclosure obligations, block
+      SOC 2 audit sign-off, or cause customers to withhold contract renewals until the issue is resolved.
+    remediation_steps:
+      - "Update the affected dependency in {service_name} to version {threshold_value} or higher."
+      - "Review the CVE advisory for {finding_title} to understand the attack vector and determine if the vulnerable code path is exercised."
+      - "If an immediate upgrade is not possible, apply any available mitigation (e.g. disabling the vulnerable feature, input validation)."
+      - "Scan transitive dependencies as well — the CVE may be introduced indirectly via another package."
+      - "Add the patched version as a lower bound in your dependency manifest to prevent accidental downgrades."
+
+  - finding_type: outdated_dependency
+    dimension: dependencies
+    severity_levels:
+      - low
+      - medium
+    explanation_template: >
+      A dependency in {service_name} is significantly out of date: {finding_title} is at version
+      {actual_value}, while the latest stable release is {threshold_value}. Outdated dependencies
+      accumulate security patches, bug fixes, and API improvements that are missed until a
+      major catch-up upgrade is required — which carries higher risk than incremental updates.
+    business_impact_template: >
+      Maintaining outdated dependencies in {service_name} increases the cost of future upgrades,
+      reduces access to performance improvements and security fixes, and may lead to incompatibility
+      with other updated components in the same system.
+    remediation_steps:
+      - "Schedule an upgrade of {finding_title} from {actual_value} to {threshold_value} in a dedicated dependency-update PR."
+      - "Review the changelog or release notes between {actual_value} and {threshold_value} for breaking changes."
+      - "Run the full test suite after upgrading to confirm no regressions."
+      - "Consider adopting an automated dependency update tool (e.g. Dependabot, Renovate) to catch outdated packages earlier."
+
+  - finding_type: major_version_bump
+    dimension: dependencies
+    severity_levels:
+      - medium
+      - high
+    explanation_template: >
+      {pr_reference} for {service_name} upgrades {finding_title} from version {actual_value} to
+      {threshold_value}, crossing a major version boundary. Major version bumps indicate breaking
+      API changes per semantic versioning conventions. This upgrade may silently change behaviour,
+      remove previously relied-upon features, or require migration of calling code.
+    business_impact_template: >
+      Major dependency upgrades in {service_name} carry a higher risk of introducing regressions
+      than patch or minor updates. Without thorough testing against {finding_title} {threshold_value},
+      incompatibilities may only surface under production traffic patterns.
+    remediation_steps:
+      - "Read the migration guide for {finding_title} {threshold_value} and identify all breaking changes relevant to {service_name}."
+      - "Search the codebase for all usages of deprecated or removed APIs and update them before merging."
+      - "Run integration tests and load tests after the upgrade — major releases often change performance characteristics."
+      - "Deploy the upgrade to a staging environment first and monitor for errors before promoting to production."
+      - "Keep the previous version pinned in a branch as a rollback reference in case unexpected issues arise."
+
+  - finding_type: new_transitive_dependency
+    dimension: dependencies
+    severity_levels:
+      - low
+      - medium
+    explanation_template: >
+      {pr_reference} for {service_name} introduces a new transitive dependency ({finding_title})
+      that was not previously part of the dependency graph. Transitive dependencies can introduce
+      conflicting versions, unexpected licences, or security vulnerabilities without an explicit
+      decision by the engineering team.
+    business_impact_template: >
+      Unreviewed transitive dependencies in {service_name} expand the attack surface and can create
+      licence compliance issues. New transitive dependencies may also conflict with existing packages,
+      causing hard-to-debug runtime errors.
+    remediation_steps:
+      - "Review the licence of {finding_title} to ensure it is compatible with {service_name}'s licence and distribution requirements."
+      - "Check {finding_title} for known CVEs using a vulnerability scanner (e.g. pip-audit, safety, npm audit)."
+      - "Determine whether the functionality provided by {finding_title} is already available through an existing dependency."
+      - "If {finding_title} is required, pin it to an explicit version in your dependency manifest to make the dependency explicit and auditable."

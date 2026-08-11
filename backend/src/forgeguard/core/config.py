@@ -117,6 +117,18 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------ #
+    # AI Template Fallback
+    # ------------------------------------------------------------------ #
+    template_default_confidence: float = Field(
+        default=0.7,
+        description=(
+            "Default confidence score (0.0–1.0) assigned to template-generated AI responses. "
+            "Set via TEMPLATE_DEFAULT_CONFIDENCE env var. Generic fallback templates always "
+            "use 0.5 regardless of this setting."
+        ),
+    )
+
+    # ------------------------------------------------------------------ #
     # AI Response Cache
     # ------------------------------------------------------------------ #
     ai_cache_ttl_seconds: int = Field(

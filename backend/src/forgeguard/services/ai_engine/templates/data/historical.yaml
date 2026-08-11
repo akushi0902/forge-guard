@@ -1,0 +1,87 @@
+# Historical Pattern Finding Templates
+# Covers the 4 most common historical risk patterns
+
+templates:
+  - finding_type: similar_change_caused_incident
+    dimension: historical
+    severity_levels:
+      - high
+      - critical
+    explanation_template: >
+      Historical data for {service_name} shows that changes similar to {finding_title} in
+      {pr_reference} have caused production incidents {actual_value} times in the past.
+      The change pattern — {dimension} in the affected module — matches the signature of
+      previous incidents with severity {severity}. This does not mean the current change
+      will fail, but it warrants additional scrutiny.
+    business_impact_template: >
+      Repeating a change pattern that previously caused incidents in {service_name} carries
+      elevated deployment risk. Historical incident correlation is one of the strongest
+      predictors of future incidents when the underlying root cause has not been fully addressed.
+    remediation_steps:
+      - "Review the incident postmortems for {service_name} related to {finding_title} to understand what went wrong previously."
+      - "Confirm that the conditions that caused previous incidents (missing checks, race conditions, schema mismatches) are addressed in {pr_reference}."
+      - "Add specific regression tests that would have caught the previous incident."
+      - "Consider a staged rollout (canary or blue/green) for {service_name} to limit blast radius if history repeats."
+      - "Ensure the on-call runbook for {service_name} includes this change pattern as a known risk area."
+
+  - finding_type: high_risk_file_modified
+    dimension: historical
+    severity_levels:
+      - medium
+      - high
+      - critical
+    explanation_template: >
+      {finding_title} in {service_name} is flagged as a high-risk file based on its change
+      history. This file has a defect density of {actual_value} bugs per {threshold_value} changes
+      historically, making it one of the most defect-prone modules in {service_name}.
+      Changes to high-risk files require proportionally more careful review and testing.
+    business_impact_template: >
+      Modifying high-risk files in {service_name} disproportionately increases the probability
+      of introducing defects that reach production. The elevated defect density of {finding_title}
+      suggests accumulated technical debt or unclear ownership that compounds each change.
+    remediation_steps:
+      - "Allocate additional review capacity for {finding_title}: request at least two independent reviewers from the {service_name} team."
+      - "Ensure that all existing tests for {finding_title} pass before merging {pr_reference}."
+      - "Write targeted tests for the specific behaviour changed in {pr_reference} before implementing the change."
+      - "Consider scheduling a dedicated technical debt session for {finding_title} to reduce its long-term risk profile."
+
+  - finding_type: deployment_window_risk
+    dimension: historical
+    severity_levels:
+      - medium
+      - high
+    explanation_template: >
+      {pr_reference} for {service_name} is scheduled for deployment during a historically
+      risky time window ({finding_title}). Historical data shows that deployments to
+      {service_name} during this window have an incident rate of {actual_value}%, compared
+      to a baseline of {threshold_value}% outside this window.
+    business_impact_template: >
+      Deploying {service_name} during high-risk windows (e.g. peak traffic periods, end-of-quarter,
+      holiday seasons, concurrent release windows) reduces the organisation's ability to respond
+      to incidents and increases the user impact of any issues that arise.
+    remediation_steps:
+      - "If possible, defer the deployment of {pr_reference} to {service_name} until outside the high-risk window."
+      - "If the deployment must proceed, ensure the on-call engineer is available and briefed on the change."
+      - "Prepare a rollback plan and verify that the rollback can be executed within your recovery time objective."
+      - "Enable enhanced monitoring and alerting for {service_name} for at least 2 hours after the deployment."
+      - "Notify dependent teams that {service_name} is being deployed during a sensitive window."
+
+  - finding_type: insufficient_soak_time
+    dimension: historical
+    severity_levels:
+      - medium
+      - high
+    explanation_template: >
+      The previous change to {finding_title} in {service_name} was merged {actual_value} ago —
+      less than the recommended soak time of {threshold_value}. A new change in {pr_reference}
+      is being proposed before the previous change has had time to demonstrate stability in
+      production, making it harder to attribute any issues to the correct change.
+    business_impact_template: >
+      Stacking changes in {service_name} without adequate soak time between deployments makes
+      incident root cause analysis significantly more difficult. If a production issue emerges,
+      it will be unclear which change caused it, slowing mitigation and increasing customer impact.
+    remediation_steps:
+      - "Allow the previous change to {finding_title} to soak for at least {threshold_value} before merging {pr_reference}."
+      - "Monitor error rates, latency, and key business metrics for {service_name} during the soak period."
+      - "If {pr_reference} is a critical fix for a production issue, document the exception and ensure enhanced monitoring is active."
+      - "Review your team's deployment cadence for {service_name} — frequent, small changes with adequate soak time are safer than batched large changes."
