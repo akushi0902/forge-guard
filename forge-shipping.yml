@@ -1,0 +1,278 @@
+# ForgeGuard — Forge Shipping Engine Pipeline Configuration
+#
+# Triggers:
+#   PR webhook:  build → scan → push → deploy-dev → smoke-test
+#   Tag webhook: full pipeline through production including manual gate
+#
+# Secrets are injected via Forge Shipping's secret management — never hardcoded.
+# All five security scans must pass before any artifact is pushed to the registry.
+
+name: forgeguard-pipeline
+version: "1.0"
+
+triggers:
+  - type: pr_webhook
+    stages: [build, scan, push, deploy-dev, smoke-test]
+  - type: tag_webhook
+    pattern: "v*"
+    stages:
+      - build
+      - scan
+      - push
+      - deploy-dev
+      - smoke-test
+      - deploy-staging
+      - integration-test
+      - gate
+      - deploy-prod
+      - prod-verify
+
+environment:
+  REGISTRY_HOST: ${{ secrets.ECR_REGISTRY_HOST }}
+  IMAGE_BACKEND: ${{ env.REGISTRY_HOST }}/forgeguard/backend
+  IMAGE_FRONTEND: ${{ env.REGISTRY_HOST }}/forgeguard/frontend
+  GIT_SHA: ${{ context.git_sha }}
+  BACKEND_URL: ${{ env.BACKEND_URL }}
+
+# ---------------------------------------------------------------------------
+# Stage 1: Build (parallel)
+# ---------------------------------------------------------------------------
+stages:
+  - name: build
+    parallel: true
+    steps:
+      - id: build:backend
+        type: build:docker
+        dockerfile: ./backend/Dockerfile
+        context: ./backend
+        image: ${{ env.IMAGE_BACKEND }}
+        tags:
+          - ${{ env.GIT_SHA }}
+          - latest
+        timeout: 5m
+
+      - id: build:frontend-node
+        type: build:node
+        node_version: "20"
+        working_dir: ./ui
+        commands:
+          - npm ci
+          - npm run build
+        timeout: 3m
+
+      - id: build:frontend-docker
+        type: build:docker
+        dockerfile: ./ui/Dockerfile
+        context: ./ui
+        image: ${{ env.IMAGE_FRONTEND }}
+        tags:
+          - ${{ env.GIT_SHA }}
+          - latest
+        depends_on:
+          - build:frontend-node
+        timeout: 3m
+
+# ---------------------------------------------------------------------------
+# Stage 2: Scan (parallel — ALL must pass before push)
+# ---------------------------------------------------------------------------
+  - name: scan
+    parallel: true
+    on_failure: block
+    depends_on: [build]
+    steps:
+      - id: scan:semgrep
+        type: scan:semgrep
+        config: auto
+        targets:
+          - ./backend/src
+          - ./ui/src
+        timeout: 5m
+        on_failure: block
+
+      - id: scan:snyk
+        type: scan:snyk
+        severity_threshold: high
+        targets:
+          - ./backend
+          - ./ui
+        snyk_token: ${{ secrets.SNYK_TOKEN }}
+        timeout: 5m
+        on_failure: block
+
+      - id: scan:gitleaks
+        type: scan:gitleaks
+        config: .gitleaks.toml
+        timeout: 2m
+        on_failure: block
+
+      - id: scan:grype
+        type: scan:grype
+        images:
+          - ${{ env.IMAGE_BACKEND }}:${{ env.GIT_SHA }}
+          - ${{ env.IMAGE_FRONTEND }}:${{ env.GIT_SHA }}
+        fail_on: high
+        timeout: 5m
+        on_failure: block
+
+      - id: scan:sonarqube
+        type: scan:sonarqube
+        project_properties: sonar-project.properties
+        sonar_token: ${{ secrets.SONAR_TOKEN }}
+        sonar_host: ${{ secrets.SONAR_HOST_URL }}
+        quality_gate:
+          coverage_threshold: 80
+          block_on_critical_issues: true
+        pre_commands:
+          - cd backend && pytest --cov --cov-report=xml -q -m "not integration"
+        timeout: 10m
+        on_failure: block
+
+# ---------------------------------------------------------------------------
+# Stage 3: Push (after all scans pass)
+# ---------------------------------------------------------------------------
+  - name: push
+    depends_on: [scan]
+    steps:
+      - id: push:backend
+        type: push:ecr
+        image: ${{ env.IMAGE_BACKEND }}
+        tag: ${{ env.GIT_SHA }}
+        registry: ${{ secrets.ECR_REGISTRY_HOST }}
+        aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws_region: ${{ secrets.AWS_REGION }}
+
+      - id: push:frontend
+        type: push:ecr
+        image: ${{ env.IMAGE_FRONTEND }}
+        tag: ${{ env.GIT_SHA }}
+        registry: ${{ secrets.ECR_REGISTRY_HOST }}
+        aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws_region: ${{ secrets.AWS_REGION }}
+
+# ---------------------------------------------------------------------------
+# Stage 4: Deploy Dev
+# ---------------------------------------------------------------------------
+  - name: deploy-dev
+    depends_on: [push]
+    steps:
+      - id: deploy:dev
+        type: deploy:docker-compose
+        compose_file: docker-compose.dev.yml
+        env_file: ${{ secrets.DEV_ENV_FILE }}
+        image_tag: ${{ env.GIT_SHA }}
+        rollback:
+          on_health_check_failure: true
+          image_tag: ${{ context.previous_stable_sha }}
+          teardown_on_no_previous: true
+
+# ---------------------------------------------------------------------------
+# Stage 5: Smoke Test
+# ---------------------------------------------------------------------------
+  - name: smoke-test
+    depends_on: [deploy-dev]
+    steps:
+      - id: test:smoke
+        type: test:generic
+        command: bash scripts/smoke-test.sh
+        env:
+          BASE_URL: ${{ env.BACKEND_URL }}
+        timeout: 2m
+        on_failure: block
+
+# ---------------------------------------------------------------------------
+# Stage 6: Deploy Staging
+# ---------------------------------------------------------------------------
+  - name: deploy-staging
+    depends_on: [smoke-test]
+    steps:
+      - id: deploy:staging
+        type: deploy:docker-compose
+        compose_file: docker-compose.staging.yml
+        env_file: ${{ secrets.STAGING_ENV_FILE }}
+        image_tag: ${{ env.GIT_SHA }}
+        rollback:
+          on_health_check_failure: true
+          image_tag: ${{ context.previous_stable_sha }}
+          teardown_on_no_previous: true
+
+# ---------------------------------------------------------------------------
+# Stage 7: Integration Test
+# ---------------------------------------------------------------------------
+  - name: integration-test
+    depends_on: [deploy-staging]
+    steps:
+      - id: test:integration
+        type: test:generic
+        command: bash scripts/integration-test.sh
+        env:
+          BASE_URL: ${{ env.STAGING_BACKEND_URL }}
+        timeout: 5m
+        on_failure: block
+
+# ---------------------------------------------------------------------------
+# Stage 8: Manual Approval Gate
+# ---------------------------------------------------------------------------
+  - name: gate
+    depends_on: [integration-test]
+    steps:
+      - id: gate:prod-approval
+        type: gate:manual
+        message: |
+          All automated checks have passed. Review the integration test results
+          and approve this deployment to production.
+        required_roles:
+          - tech_lead
+          - platform_admin
+        timeout: 30d
+        on_timeout: expire
+
+# ---------------------------------------------------------------------------
+# Stage 9: Deploy Production
+# ---------------------------------------------------------------------------
+  - name: deploy-prod
+    depends_on: [gate]
+    steps:
+      - id: deploy:prod
+        type: deploy:docker-compose
+        compose_file: docker-compose.prod.yml
+        env_file: ${{ secrets.PROD_ENV_FILE }}
+        image_tag: ${{ env.GIT_SHA }}
+        rollback:
+          on_health_check_failure: true
+          image_tag: ${{ context.previous_stable_sha }}
+          teardown_on_no_previous: true
+
+# ---------------------------------------------------------------------------
+# Stage 10: Production Verification
+# ---------------------------------------------------------------------------
+  - name: prod-verify
+    depends_on: [deploy-prod]
+    steps:
+      - id: test:prod-smoke
+        type: test:generic
+        command: bash scripts/smoke-test.sh
+        env:
+          BASE_URL: ${{ env.PROD_BACKEND_URL }}
+        timeout: 2m
+        on_failure: rollback
+
+      - id: test:prod-health-check
+        type: test:generic
+        command: |
+          bash -c '
+            set -e
+            RESPONSE=$(curl -sf "$PROD_BACKEND_URL/health")
+            STATUS=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)[\"status\"])")
+            if [ "$STATUS" != "healthy" ]; then
+              echo "FAIL: /health status is $STATUS, expected healthy"
+              echo "Response: $RESPONSE"
+              exit 1
+            fi
+            echo "PASS: Production health check verified"
+          '
+        env:
+          PROD_BACKEND_URL: ${{ env.PROD_BACKEND_URL }}
+        timeout: 2m
+        on_failure: rollback

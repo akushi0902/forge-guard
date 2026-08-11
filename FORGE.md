@@ -91,3 +91,10 @@
 - **Files:** 15 (+1204/-33)
 - **Duration:** 1027ss
 - **Approach:** Extended the existing pytest infrastructure (which already had asyncio_mode=auto, test_settings, app, async_client) with: (1) testcontainers-based PostgreSQL fixture chain (postgres_container → db_url → apply_migrations → db_engine → db_session) using synchronous session-scope fixtures to avoid event-loop complications, and NullPool for clean per-test connection lifecycle; (2) test_client and authenticated_client (JWT factory via PyJWT) fixtures; (3) factory-boy factories for all 7 domain entities — UserFactory uses SQLAlchemyModelFactory with the real User model; the remaining 6 factories use plain factory.Factory with Python dataclasses since their SQLAlchemy models don't exist yet (upgrading to SQLAlchemyModelFactory requires only a Meta.model swap); (4) unit smoke tests (no Docker) covering all fixtures and factory.build() calls; (5) integration smoke tests covering db_session INSERT/SELECT/rollback isolation and factory persistence; (6) make test / make test-ci targets. Coverage fail_under kept at 0 in config (separate CI gate pattern) per the constraint that it must not block the test suite.
+
+## WO-006: User Story: WO-006 - Configure Forge Shipping CI/CD Pipeline with Gates
+- **Status:** completed
+- **Commit:** `dbe60a0`
+- **Files:** 7 (+946/-0)
+- **Duration:** 518ss
+- **Approach:** Created all 7 CI/CD pipeline artifacts from scratch. forge-shipping.yml defines the complete Forge Shipping Engine pipeline with 10 sequential stages: parallel build (backend Docker + frontend Node + frontend Docker), parallel scan (semgrep/snyk/grype/gitleaks/sonarqube — all blocking), ECR push (gated on scan pass), deploy-dev, smoke-test, deploy-staging, integration-test, manual approval gate (tech_lead or platform_admin only), deploy-prod, and prod-verify. Both docker-compose override files use image tag substitution (IMAGE_BACKEND/IMAGE_FRONTEND + IMAGE_TAG env vars) rather than build: contexts, appropriate for CI-pushed images. Rollback is configured on health-check failure in all environments with teardown_on_no_previous for first deployments.

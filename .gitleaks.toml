@@ -1,0 +1,97 @@
+# Gitleaks configuration for ForgeGuard
+#
+# Extends the built-in default ruleset with project-specific rules.
+# Run:  gitleaks detect --config .gitleaks.toml --source .
+#
+# The allowlist exempts test fixtures and documentation examples that
+# intentionally contain example/fake tokens to avoid false positives.
+
+title = "ForgeGuard Gitleaks Configuration"
+
+[extend]
+# Use the default gitleaks ruleset as the base.
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Custom rules — patterns specific to the ForgeGuard technology stack
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "forgeguard-jwt-secret"
+description = "Potential JWT secret key in ForgeGuard config"
+regex = '''(?i)(jwt[_\-]?secret[_\-]?key|jwt[_\-]?signing[_\-]?key)\s*[:=]\s*["']?([A-Za-z0-9+/=_\-]{32,})["']?'''
+tags = ["jwt", "secret", "forgeguard"]
+entropy = 3.5
+
+[[rules]]
+id = "aws-access-key"
+description = "AWS Access Key ID"
+regex = '''(AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}'''
+tags = ["aws", "cloud", "secret"]
+
+[[rules]]
+id = "aws-secret-access-key"
+description = "AWS Secret Access Key"
+regex = '''(?i)aws[_\-]?secret[_\-]?access[_\-]?key\s*[:=]\s*["']?([A-Za-z0-9+/]{40})["']?'''
+tags = ["aws", "cloud", "secret"]
+entropy = 4.0
+
+[[rules]]
+id = "database-url-with-password"
+description = "Database connection URL containing a password"
+regex = '''(postgresql|postgres|mysql|mongodb)\+?\w*://[^:@\s]+:[^@\s]{8,}@'''
+tags = ["database", "credentials"]
+
+[[rules]]
+id = "snyk-token"
+description = "Snyk API token"
+regex = '''(?i)snyk[_\-]?token\s*[:=]\s*["']?([a-f0-9\-]{36,})["']?'''
+tags = ["snyk", "secret"]
+
+[[rules]]
+id = "sonarqube-token"
+description = "SonarQube authentication token"
+regex = '''(?i)sonar[_\-]?(token|auth)\s*[:=]\s*["']?([a-zA-Z0-9]{40,})["']?'''
+tags = ["sonarqube", "secret"]
+
+# ---------------------------------------------------------------------------
+# Allowlist — paths, commits, and patterns that should NOT be flagged
+# ---------------------------------------------------------------------------
+
+[allowlist]
+description = "Exempted test fixtures, documentation, and example files"
+
+# Files that intentionally contain example/placeholder tokens.
+paths = [
+  '''.env\.example$''',
+  '''\.env\.test$''',
+  '''tests/.*''',
+  '''backend/tests/.*''',
+  '''ui/src/test/.*''',
+  '''docs/.*''',
+  '''README\.md$''',
+  '''FORGE\.md$''',
+  '''.*\.md$''',
+  '''scripts/generate-dev-certs\.sh$''',
+]
+
+# Known safe patterns that look like secrets but aren't.
+regexes = [
+  # bcrypt hashes in test fixtures — bcrypt format, not a real secret.
+  '''\$2[aby]\$\d{2}\$''',
+  # Placeholder values explicitly marked as examples.
+  '''(example|placeholder|changeme|your[-_]?[a-z]+[-_]?here|REPLACE_ME|TODO)''',
+  # UUIDs used as test IDs.
+  '''[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}''',
+]
+
+# Stopwords that indicate a value is not a real secret.
+stopwords = [
+  "example",
+  "placeholder",
+  "changeme",
+  "CHANGE_ME",
+  "your-secret-here",
+  "localhost",
+  "127.0.0.1",
+]
