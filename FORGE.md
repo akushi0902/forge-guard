@@ -287,3 +287,10 @@
 - **Files:** 9 (+651/-1)
 - **Duration:** 503ss
 - **Approach:** Added three simulation indicator fields (is_simulated, data_classification, simulation_disclaimer) to all four demo endpoint response schemas. Created a single-source constants module (constants/demo.py) with SIMULATION_DISCLAIMER and DATA_CLASSIFICATION_SIMULATED to prevent text drift. The generic DemoResponseEnvelope[T] provides a programmatic wrapping utility. All three response models (TransactionResponse, PaymentServiceInfoResponse, ResetResponse) were extended with data_classification and simulation_disclaimer using defaults from the constants — TransactionResponse already had is_simulated=True from WO-054. A ServiceResponse schema with is_demo: bool was added for future service listing endpoints. A demo_indicator service helper provides both sync (known-demo) and async (DB-lookup) enrichment paths.
+
+## WO-099: User Story: WO-099 - Audit Log Completeness Compliance Test Suite
+- **Status:** completed
+- **Commit:** `7dead0e`
+- **Files:** 3 (+1047/-0)
+- **Duration:** 761ss
+- **Approach:** Created a compliance test suite that tests audit log completeness by exercising AuditService.log_event() and log_mutation() directly (since the mutation HTTP endpoints for services/policies/etc. are not yet implemented). The assert_audit_record_created helper counts audit_logs rows before/after each operation and returns the new record. Tests cover all required mutation categories and auth events, verify all required fields, test the completeness 1:1 ratio, and verify immutability via the database trigger (migration b8c9d0e1f2a3). A compliance conftest.py provides asyncpg_pool, audit_clean (truncate), and audit_service fixtures scoped to the compliance directory.
