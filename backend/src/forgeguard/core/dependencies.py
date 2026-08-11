@@ -155,6 +155,22 @@ async def get_audit_log_repository(
     return AuditLogRepository(pool)
 
 
+async def get_demo_transaction_repository(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    from forgeguard.data.repositories.demo_repository import DemoTransactionRepository  # noqa: PLC0415
+
+    return DemoTransactionRepository(pool)
+
+
+async def get_demo_app_service(
+    repo=Depends(get_demo_transaction_repository),
+):
+    from forgeguard.services.demo_app import DemoAppService  # noqa: PLC0415
+
+    return DemoAppService(repo)
+
+
 __all__ = [
     "SettingsDep",
     "get_settings",
@@ -167,4 +183,6 @@ __all__ = [
     "get_score_repository",
     "get_decision_repository",
     "get_audit_log_repository",
+    "get_demo_transaction_repository",
+    "get_demo_app_service",
 ]

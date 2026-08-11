@@ -61,10 +61,12 @@ from forgeguard.data.models.remediation import (  # noqa: E402, F401
     FindingException,
     RemediationRecommendation,
 )
+from forgeguard.data.models.demo import DemoTransaction  # noqa: E402, F401
 
 __all__ = [
     "AIConversation",
     "Assessment",
+    "DemoTransaction",
     "AssessmentScore",
     "AuditLog",
     "Base",

@@ -27,6 +27,7 @@ from fastapi.responses import JSONResponse
 
 from forgeguard.api.routes.admin import router as admin_router
 from forgeguard.api.routes.auth import router as auth_router
+from forgeguard.api.routes.demo import router as demo_router
 from forgeguard.api.routes.platform import router as platform_router
 from forgeguard.api.routes.system import router as system_router
 from forgeguard.core.config import Settings, get_settings
@@ -166,6 +167,9 @@ def create_app() -> FastAPI:
 
     # Platform observability endpoints (Operator/Admin role required).
     app.include_router(platform_router)
+
+    # Demo mock Payment Service endpoints.
+    app.include_router(demo_router)
 
     # Root stub retained for backward compatibility.
     @app.get("/", tags=["system"], summary="Root liveness probe")
