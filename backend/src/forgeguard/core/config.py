@@ -80,6 +80,29 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------ #
+    # Rate Limiting
+    # ------------------------------------------------------------------ #
+    rate_limit_general: int = Field(
+        default=100,
+        description="Max requests per window for general (non-auth) endpoints.",
+    )
+    rate_limit_auth: int = Field(
+        default=10,
+        description="Max requests per window for authentication endpoints.",
+    )
+    rate_limit_window_seconds: int = Field(
+        default=60,
+        description="Token bucket refill window in seconds.",
+    )
+    rate_limit_auth_paths: list[str] = Field(
+        default=["/api/v1/auth/"],
+        description=(
+            "Path prefixes that trigger the stricter auth rate limit tier. "
+            "Set via env as a JSON array: RATE_LIMIT_AUTH_PATHS='[\"/api/v1/auth/\"]'"
+        ),
+    )
+
+    # ------------------------------------------------------------------ #
     # Observability
     # ------------------------------------------------------------------ #
     log_level: str = Field(

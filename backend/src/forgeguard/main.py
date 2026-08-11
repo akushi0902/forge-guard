@@ -28,6 +28,7 @@ from forgeguard.core.config import Settings, get_settings
 from forgeguard.core.logging import configure_logging
 from forgeguard.middleware.logging import RequestLoggingMiddleware
 from forgeguard.middleware.metrics import MetricsMiddleware
+from forgeguard.middleware.rate_limiter import RateLimiterMiddleware
 from forgeguard.middleware.request_id import RequestIDMiddleware
 
 logger = structlog.get_logger(__name__)
@@ -78,14 +79,16 @@ def create_app() -> FastAPI:
     # Desired order (outermost → innermost):
     #   1. RequestIDMiddleware      — assigns UUID, clears stale context
     #   2. RequestLoggingMiddleware — binds actor/resource/operation, logs lifecycle
-    #   3. MetricsMiddleware        — records Prometheus counters & histograms
-    #   4. Route handler
+    #   3. RateLimiterMiddleware    — token bucket per-IP rate limiting
+    #   4. MetricsMiddleware        — records Prometheus counters & histograms
+    #   5. Route handler
     #
     # Therefore we register them innermost-first.
     # ------------------------------------------------------------------ #
-    app.add_middleware(MetricsMiddleware)           # registered first  → innermost
-    app.add_middleware(RequestLoggingMiddleware)    # registered second → middle
-    app.add_middleware(RequestIDMiddleware)         # registered third  → outermost
+    app.add_middleware(MetricsMiddleware)           # registered first  → innermost (pos 4)
+    app.add_middleware(RateLimiterMiddleware)       # registered second → pos 3
+    app.add_middleware(RequestLoggingMiddleware)    # registered third  → pos 2
+    app.add_middleware(RequestIDMiddleware)         # registered fourth → outermost (pos 1)
 
     # ------------------------------------------------------------------ #
     # Routers
