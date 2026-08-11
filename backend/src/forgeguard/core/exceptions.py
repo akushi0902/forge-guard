@@ -151,3 +151,35 @@ class RateLimitError(ForgeGuardError):
         details: dict | None = None,
     ) -> None:
         super().__init__(message, details=details)
+
+
+class PermissionDeniedError(ForbiddenError):
+    """HTTP 403 — raised by the RBAC module when a permission check fails.
+
+    Extends :class:`ForbiddenError` with a ``required_roles`` list so the
+    error handler can surface which roles carry the needed permission.
+
+    Args:
+        message:             Human-readable denial reason (safe for API consumers).
+        required_permission: The permission slug the caller is missing.
+        required_roles:      Roles that hold ``required_permission``.
+        contact_role:        Who to contact for access.
+        details:             Optional extra context dict.
+    """
+
+    def __init__(
+        self,
+        message: str = "You do not have permission to perform this action",
+        *,
+        required_permission: str = "",
+        required_roles: list[str] | None = None,
+        contact_role: str = "Platform Admin",
+        details: dict | None = None,
+    ) -> None:
+        super().__init__(
+            message,
+            required_permission=required_permission,
+            contact_role=contact_role,
+            details=details,
+        )
+        self.required_roles: list[str] = required_roles or []

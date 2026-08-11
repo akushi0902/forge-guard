@@ -83,7 +83,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from forgeguard.core.exceptions import ForbiddenError, ForgeGuardError
+from forgeguard.core.exceptions import ForbiddenError, ForgeGuardError, PermissionDeniedError
 
 logger = logging.getLogger(__name__)
 structlog_logger = structlog.get_logger(__name__)
@@ -293,14 +293,22 @@ async def handle_forgeguard_error(
         reference_id=reference_id,
     )
 
-    if isinstance(exc, ForbiddenError):
+    if isinstance(exc, PermissionDeniedError):
+        body: dict[str, Any] = {
+            "error": exc.error_type,
+            "message": exc.message,
+            "reference_id": reference_id,
+            "required_permission": exc.required_permission,
+            "required_roles": exc.required_roles,
+        }
+    elif isinstance(exc, ForbiddenError):
         action = (
             f"Contact {exc.contact_role} to request"
             f" the '{exc.required_permission}' permission."
             if exc.required_permission
             else f"Contact {exc.contact_role} to request elevated access."
         )
-        body: dict[str, Any] = {
+        body = {
             "error": exc.error_type,
             "message": exc.message,
             "reference_id": reference_id,
