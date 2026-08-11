@@ -50,16 +50,28 @@ from forgeguard.data.models.audit import (  # noqa: E402, F401
     AuditLog,
 )
 from forgeguard.data.models.prompt_template import PromptTemplate  # noqa: E402, F401
+from forgeguard.data.models.assessments import (  # noqa: E402, F401
+    Assessment,
+    AssessmentScore,
+    Finding,
+    ReleaseAssessment,
+    ReleaseDecision,
+)
 
 __all__ = [
     "AIConversation",
+    "Assessment",
+    "AssessmentScore",
     "AuditLog",
     "Base",
+    "Finding",
     "Permission",
     "Policy",
     "PolicyRule",
     "PromptTemplate",
     "RefreshToken",
+    "ReleaseAssessment",
+    "ReleaseDecision",
     "Role",
     "RolePermission",
     "Service",
