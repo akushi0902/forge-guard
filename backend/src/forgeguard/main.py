@@ -87,24 +87,36 @@ def create_app() -> FastAPI:
     )
 
     # ------------------------------------------------------------------ #
-    # Root health stub
-    # Provides a lightweight liveness check before any routers are mounted.
+    # Health endpoints
+    # Both are intentionally unauthenticated liveness/readiness probes.
+    #
+    # GET /                  — root stub, kept for backward-compat
+    # GET /api/v1/health     — canonical health endpoint; Docker Compose
+    #                          health checks and Nginx probes use this path
     # ------------------------------------------------------------------ #
-    @app.get("/", tags=["health"], summary="Root health check")
-    async def root_health() -> JSONResponse:
-        """Return 200 OK with application version.
+    def _health_body() -> dict[str, str]:
+        return {
+            "status": "ok",
+            "service": "forgeguard",
+            "version": settings.app_version,
+        }
 
-        This endpoint is intentionally unauthenticated — it exists solely to
-        confirm that the application process is alive and has started
-        successfully.
+    @app.get("/", tags=["health"], summary="Root liveness probe")
+    async def root_health() -> JSONResponse:
+        """Minimal liveness probe at the application root."""
+        return JSONResponse(content=_health_body())
+
+    @app.get("/api/v1/health", tags=["health"], summary="API health probe")
+    async def api_health() -> JSONResponse:
+        """Canonical health endpoint accessible through the Nginx reverse proxy.
+
+        Docker Compose health checks use this path via the internal network:
+            curl -f http://forgeguard-backend:8000/api/v1/health
+
+        Through Nginx it is accessible at:
+            https://localhost/api/v1/health
         """
-        return JSONResponse(
-            content={
-                "status": "ok",
-                "service": "forgeguard",
-                "version": settings.app_version,
-            }
-        )
+        return JSONResponse(content=_health_body())
 
     logger.info(
         "ForgeGuard application factory complete",

@@ -48,8 +48,10 @@ COPY nginx.conf /etc/nginx/conf.d/forgeguard.conf
 # Copy the Vite production bundle from the builder stage.
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Nginx listens on port 80 inside the container.
-EXPOSE 80
+# Nginx listens on port 80 (HTTP) and 443 (HTTPS) inside the container.
+# When run via docker-compose.yml, nginx/nginx.conf is volume-mounted to
+# enable TLS and API reverse-proxy functionality.
+EXPOSE 80 443
 
 # Run Nginx in the foreground (required for Docker PID 1).
 CMD ["nginx", "-g", "daemon off;"]

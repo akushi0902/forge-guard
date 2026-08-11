@@ -1,0 +1,76 @@
+# ForgeGuard — Development overrides for docker-compose.yml
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Or via the Makefile convenience target:
+#   make dev
+#
+# This file enables:
+#   - Backend hot-reload via volume-mounted source
+#   - DEBUG logging on all services
+#   - Relaxed resource limits (no hard CPU caps)
+
+name: forgeguard
+
+services:
+
+  forgeguard-db:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-forgeguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-forgeguard_dev}
+    # Expose PostgreSQL to the host in dev so developers can use psql/TablePlus directly.
+    ports:
+      - "5432:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  forgeguard-migration:
+    environment:
+      LOG_LEVEL: DEBUG
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  forgeguard-backend:
+    # Override the gunicorn production command with a hot-reloading uvicorn server.
+    command:
+      [
+        "uvicorn",
+        "forgeguard.main:create_app",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+        "--reload-dir",
+        "/app/src",
+        "--log-level",
+        "debug",
+      ]
+    environment:
+      LOG_LEVEL: DEBUG
+      APP_ENV: development
+    volumes:
+      # Mount source directly so code changes are reflected without rebuild.
+      - ./backend/src:/app/src:ro
+    ports:
+      # Expose backend directly in dev for debugging / local curl.
+      - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  forgeguard-frontend:
+    environment:
+      NGINX_ENVSUBST_TEMPLATE_DIR: /etc/nginx/templates
+    deploy:
+      resources:
+        limits:
+          memory: 256m

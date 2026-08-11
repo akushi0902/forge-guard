@@ -65,6 +65,11 @@ COPY --from=builder /install /usr/local
 # Copy application source.
 COPY --chown=forgeguard:forgeguard src/ /app/src/
 
+# Copy Alembic migration files so the migration container can run
+# 'alembic upgrade head' using this same image.
+COPY --chown=forgeguard:forgeguard alembic/ /app/alembic/
+COPY --chown=forgeguard:forgeguard alembic.ini /app/alembic.ini
+
 WORKDIR /app
 
 # Expose the PYTHONPATH so that the src-layout package is importable.
