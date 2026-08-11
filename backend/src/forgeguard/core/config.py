@@ -80,6 +80,26 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------ #
+    # CORS
+    # ------------------------------------------------------------------ #
+    cors_allowed_origins: str = Field(
+        default="http://localhost:3000",
+        description=(
+            "Comma-separated list of allowed CORS origins. "
+            "Must NOT contain '*' — wildcard is incompatible with allow_credentials=True. "
+            "Example: 'https://app.example.com,https://staging.example.com'"
+        ),
+    )
+    cors_allow_methods: list[str] = Field(
+        default=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        description="Allowed HTTP methods for CORS pre-flight and simple requests.",
+    )
+    cors_allow_headers: list[str] = Field(
+        default=["Content-Type", "Authorization", "X-Request-ID"],
+        description="Allowed request headers for CORS.",
+    )
+
+    # ------------------------------------------------------------------ #
     # Rate Limiting
     # ------------------------------------------------------------------ #
     rate_limit_general: int = Field(
@@ -122,6 +142,31 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     # Validators
     # ------------------------------------------------------------------ #
+    @field_validator("cors_allowed_origins")
+    @classmethod
+    def validate_cors_origins(cls, value: str) -> str:
+        """Prevent the wildcard+credentials misconfiguration at startup."""
+        origins = [o.strip() for o in value.split(",") if o.strip()]
+        if not origins:
+            logger.warning(
+                "CORS_ALLOWED_ORIGINS is empty; defaulting to http://localhost:3000"
+            )
+            return "http://localhost:3000"
+        if "*" in origins:
+            raise ValueError(
+                "CORS_ALLOWED_ORIGINS must not contain '*' when allow_credentials=True. "
+                "Specify explicit origins such as 'https://app.example.com'. "
+                "Wildcard origins are a common misconfiguration that exposes the API "
+                "to cross-origin credential theft."
+            )
+        # Normalise: strip trailing slashes and whitespace.
+        return ",".join(o.strip().rstrip("/") for o in origins)
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Return CORS allowed origins as a parsed list."""
+        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+
     @field_validator("log_level")
     @classmethod
     def validate_log_level(cls, value: str) -> str:

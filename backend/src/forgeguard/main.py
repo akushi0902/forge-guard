@@ -21,6 +21,7 @@ import logging
 
 import structlog
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from forgeguard.api.routes.system import router as system_router
@@ -30,6 +31,7 @@ from forgeguard.middleware.logging import RequestLoggingMiddleware
 from forgeguard.middleware.metrics import MetricsMiddleware
 from forgeguard.middleware.rate_limiter import RateLimiterMiddleware
 from forgeguard.middleware.request_id import RequestIDMiddleware
+from forgeguard.middleware.security_headers import SecurityHeadersMiddleware
 
 logger = structlog.get_logger(__name__)
 
@@ -80,15 +82,27 @@ def create_app() -> FastAPI:
     #   1. RequestIDMiddleware      — assigns UUID, clears stale context
     #   2. RequestLoggingMiddleware — binds actor/resource/operation, logs lifecycle
     #   3. RateLimiterMiddleware    — token bucket per-IP rate limiting
-    #   4. MetricsMiddleware        — records Prometheus counters & histograms
-    #   5. Route handler
+    #   4. CORSMiddleware           — CORS headers, pre-flight handling
+    #   5. SecurityHeadersMiddleware — inject 7 security headers on all responses
+    #   6. MetricsMiddleware        — records Prometheus counters & histograms
+    #   7. Route handler
     #
+    # FastAPI/Starlette builds the stack in reverse-registration order:
+    # the LAST add_middleware call becomes the OUTERMOST layer (runs first).
     # Therefore we register them innermost-first.
     # ------------------------------------------------------------------ #
-    app.add_middleware(MetricsMiddleware)           # registered first  → innermost (pos 4)
-    app.add_middleware(RateLimiterMiddleware)       # registered second → pos 3
-    app.add_middleware(RequestLoggingMiddleware)    # registered third  → pos 2
-    app.add_middleware(RequestIDMiddleware)         # registered fourth → outermost (pos 1)
+    app.add_middleware(MetricsMiddleware)           # registered 1st → innermost (pos 6)
+    app.add_middleware(SecurityHeadersMiddleware)   # registered 2nd → pos 5
+    app.add_middleware(                             # registered 3rd → pos 4
+        CORSMiddleware,
+        allow_origins=settings.cors_origins_list,
+        allow_credentials=True,
+        allow_methods=settings.cors_allow_methods,
+        allow_headers=settings.cors_allow_headers,
+    )
+    app.add_middleware(RateLimiterMiddleware)       # registered 4th → pos 3
+    app.add_middleware(RequestLoggingMiddleware)    # registered 5th → pos 2
+    app.add_middleware(RequestIDMiddleware)         # registered 6th → outermost (pos 1)
 
     # ------------------------------------------------------------------ #
     # Routers
