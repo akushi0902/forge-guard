@@ -49,6 +49,15 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     # Security
     # ------------------------------------------------------------------ #
+    field_encryption_key: str = Field(
+        default="",
+        description=(
+            "Base64url-encoded 32-byte key for AES-256-GCM field-level PII encryption. "
+            "Generate with: python -c \"import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())\". "
+            "Required when field-level encryption features are used; leave empty to disable. "
+            "Must decode to exactly 32 bytes."
+        ),
+    )
     jwt_secret_key: str = Field(
         default="change-me-in-production-this-is-not-secure",
         description="HMAC secret used to sign JWT access tokens. Must be overridden in production.",
