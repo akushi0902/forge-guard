@@ -9,7 +9,7 @@
 #   make up      # build and start all services
 #   open https://localhost
 
-.PHONY: help setup certs env up dev down logs clean ps shell-backend shell-db test-backend lint-backend
+.PHONY: help setup certs env up dev down logs clean ps shell-backend shell-db test test-ci test-backend lint-backend
 
 # Default target — print help.
 help:
@@ -26,7 +26,9 @@ help:
 	@echo "  make ps             Show service status"
 	@echo "  make shell-backend  Open a shell in the backend container"
 	@echo "  make shell-db       Open psql in the database container"
-	@echo "  make test-backend   Run backend pytest suite"
+	@echo "  make test           Run backend pytest suite locally (requires Docker for DB)"
+	@echo "  make test-ci        Run backend pytest with JUnit XML output for CI"
+	@echo "  make test-backend   Run backend pytest suite inside Docker container"
 	@echo "  make lint-backend   Run ruff check + format check on backend"
 	@echo "  make certs          (Re)generate self-signed TLS certificates"
 	@echo "  make env            Copy .env.example → .env (if .env absent)"
@@ -86,6 +88,12 @@ shell-db:
 	docker compose exec forgeguard-db psql -U $${POSTGRES_USER:-forgeguard} -d $${POSTGRES_DB:-forgeguard_dev}
 
 # ─── Testing / linting (run inside container or local venv) ─────────────── #
+
+test:
+	cd backend && pytest -v --cov --cov-report=term-missing --cov-report=html
+
+test-ci:
+	cd backend && pytest -v --cov --cov-report=term-missing --cov-report=xml --junitxml=results.xml
 
 test-backend:
 	docker compose exec forgeguard-backend pytest /app/../tests/ -v
