@@ -189,3 +189,10 @@
 - **Files:** 5 (+873/-12)
 - **Duration:** 535ss
 - **Approach:** Enhanced MetricsMiddleware with path normalization (UUID and integer segments replaced with {id} placeholder), excluded-path frozenset to prevent self-referential metric inflation, and five new Prometheus metrics (http_requests_in_progress, db_pool_connections_size, assessment_queue_depth, llm_circuit_breaker_state, audit_log_write_total). Created /api/v1/platform/health endpoint that reads from in-memory Prometheus gauges/counters with no DB queries, protected by X-User-Role RBAC placeholder (operator/platform_admin). Wired platform_router into create_app(). Unit and integration test suites cover normalize_path, excluded paths, counter increments, histogram observation, in-progress gauge, RBAC checks, and the 10-request accumulation scenario.
+
+## WO-012: User Story: WO-012 - Alembic Migration Framework Configuration and Initial Migrations
+- **Status:** completed
+- **Commit:** `7cdbf47`
+- **Files:** 1 (+514/-0)
+- **Duration:** 514ss
+- **Approach:** WO-012 required Alembic migration framework setup and integration tests. The infrastructure (alembic.ini, alembic/env.py, script.py.mako, and all 6 migration files) was already fully implemented by prior WOs (WO-001 scaffolded the framework; WO-007 through WO-010 created all domain migrations). The missing piece was a dedicated migration test file. Created backend/tests/data/test_migrations.py with 5 test classes (12 test methods) using function-scoped PostgreSQL 16 testcontainers for full isolation. Tests cover: (1) upgrade head creates all 15 ForgeGuard tables verified via information_schema queries, (2) downgrade base removes all tables cleanly, (3) idempotent upgrade runs twice without error, (4) step-by-step revision chain progression verifying FK ordering and per-revision table sets, (5) alembic check runs against the fully-migrated DB.
