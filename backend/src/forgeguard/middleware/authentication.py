@@ -120,6 +120,7 @@ class AuthenticationMiddleware:
         # Attach authenticated identity to request.state for downstream use.
         request.state.user_id = payload["sub"]
         request.state.user_role = payload["role"]
+        request.state.jti = payload["jti"]  # used by CSRFMiddleware at pos 6
 
         # Bind user_id to structlog context for the remainder of this request.
         structlog.contextvars.bind_contextvars(user_id=payload["sub"])

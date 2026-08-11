@@ -31,7 +31,11 @@ from forgeguard.core.config import get_settings
 from forgeguard.core.cookies import clear_auth_cookies, set_auth_cookies
 from forgeguard.core.dependencies import get_refresh_token_repository, get_user_repository
 from forgeguard.core.exceptions import BadRequestError, ForbiddenError, UnauthorizedError
-from forgeguard.core.security import validate_password_strength
+from forgeguard.core.security import (
+    decode_access_token,
+    generate_csrf_token,
+    validate_password_strength,
+)
 from forgeguard.data.repositories.refresh_tokens import RefreshTokenRepository
 from forgeguard.data.repositories.users import UserRepository
 from forgeguard.services.auth import AuthService
@@ -156,6 +160,8 @@ async def login(
         body.email, body.password
     )
     set_auth_cookies(response, access_token=access_token, refresh_token=raw_refresh)
+    payload = decode_access_token(access_token, settings.jwt_secret_key)
+    response.headers["X-CSRF-Token"] = generate_csrf_token(payload["jti"], settings.csrf_secret_key)
     return login_resp
 
 
@@ -185,6 +191,8 @@ async def refresh(
     service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key)
     new_access, new_refresh = await service.refresh_tokens(refresh_token)
     set_auth_cookies(response, access_token=new_access, refresh_token=new_refresh)
+    payload = decode_access_token(new_access, settings.jwt_secret_key)
+    response.headers["X-CSRF-Token"] = generate_csrf_token(payload["jti"], settings.csrf_secret_key)
     return {"message": "Token refreshed"}
 
 

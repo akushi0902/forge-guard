@@ -82,6 +82,13 @@ class Settings(BaseSettings):
         default="change-me-in-production-this-is-not-secure",
         description="HMAC secret used to sign JWT access tokens. Must be overridden in production.",
     )
+    csrf_secret_key: str = Field(
+        default="change-me-csrf-secret-not-for-production",
+        description=(
+            "Separate HMAC secret for stateless CSRF token generation (HMAC-SHA256 over JWT JTI). "
+            "Must differ from jwt_secret_key. Override via CSRF_SECRET_KEY env var in production."
+        ),
+    )
     jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm.")
     access_token_expire_minutes: int = Field(
         default=15,

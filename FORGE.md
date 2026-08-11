@@ -308,3 +308,10 @@
 - **Files:** 5 (+826/-18)
 - **Duration:** 593ss
 - **Approach:** Extended authenticate_user in AuthService with a full brute-force protection flow: (1) lockout checked before credential validation to enforce lockout even for right-password attempts on locked accounts, (2) atomic SQL increment_failed_attempts returns new count which is checked modulo 5 to detect lockout threshold, (3) calculate_lockout_duration() is a pure function implementing min(2^(n-1)*60, 1800)s formula, (4) reset_failed_attempts clears both counter and locked_until on successful login. Added two atomic SQL methods to UserRepository (increment returns new count via RETURNING, reset clears locked_until). RateLimiterMiddleware was already fully implemented (token bucket, 10/min auth, 100/min general, Retry-After, eviction) — no changes needed. main.py registration was already in place at position 3.
+
+## WO-025: User Story: WO-025 - Implement CSRF Token Protection for Mutation Endpoints
+- **Status:** completed
+- **Commit:** `346eb34`
+- **Files:** 8 (+670/-15)
+- **Duration:** 459ss
+- **Approach:** Stateless synchronizer token pattern: CSRF token = HMAC-SHA256(jti, csrf_secret) encoded as URL-safe base64. Stateless means no server-side storage — the token is cryptographically bound to the specific access token (via its unique JTI claim). When the access token is refreshed (new JTI), the old CSRF token is automatically invalid. Pure ASGI CSRFMiddleware at pipeline position 6 (after Auth at 5 so request.state.jti is available, before SecurityHeaders at 7). Authentication middleware updated to also set request.state.jti. Login and refresh routes decode the newly issued access token to extract JTI, compute CSRF token, and set X-CSRF-Token response header. csrf_secret_key is separate from jwt_secret_key in Settings.

@@ -19,9 +19,11 @@ Password policy (enforced by :func:`validate_password_strength`):
 from __future__ import annotations
 
 import hashlib
+import hmac
 import re
 import secrets
 import uuid
+from base64 import urlsafe_b64encode
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -165,6 +167,48 @@ def verify_password(plain: str, hashed: str) -> bool:
         return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# CSRF token functions (stateless, HMAC-SHA256 over JWT JTI)
+# ---------------------------------------------------------------------------
+
+
+def generate_csrf_token(jti: str, secret_key: str) -> str:
+    """Generate a stateless CSRF token tied to the access token's JTI claim.
+
+    Uses HMAC-SHA256 so the token is cryptographically bound to both the
+    JWT session (via JTI) and the CSRF secret.  No server-side state needed.
+
+    Args:
+        jti:        The ``jti`` claim from the access token (unique per token).
+        secret_key: The CSRF-specific signing secret (``CSRF_SECRET_KEY`` env var).
+
+    Returns:
+        URL-safe base64-encoded string without padding (~43 characters).
+    """
+    digest = hmac.new(
+        secret_key.encode("utf-8"),
+        jti.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    return urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
+def validate_csrf_token(token: str, jti: str, secret_key: str) -> bool:
+    """Return True if *token* matches the expected CSRF token for this JTI.
+
+    Uses ``hmac.compare_digest`` to prevent timing-based side-channel leaks.
+
+    Args:
+        token:      The ``X-CSRF-Token`` header value from the request.
+        jti:        The ``jti`` claim from the access token in request.state.
+        secret_key: The CSRF-specific signing secret.
+    """
+    if not token:
+        return False
+    expected = generate_csrf_token(jti, secret_key)
+    return hmac.compare_digest(token, expected)
 
 
 def validate_password_strength(plain: str) -> list[str]:
