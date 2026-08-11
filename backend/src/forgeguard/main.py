@@ -24,30 +24,11 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from forgeguard.core.config import Settings, get_settings
+from forgeguard.core.logging import configure_logging
+from forgeguard.middleware.logging import RequestLoggingMiddleware
+from forgeguard.middleware.request_id import RequestIDMiddleware
 
 logger = structlog.get_logger(__name__)
-
-
-def _configure_logging(settings: Settings) -> None:
-    """Configure structlog for structured JSON logging."""
-    log_level = getattr(logging, settings.log_level, logging.INFO)
-
-    structlog.configure(
-        wrapper_class=structlog.make_filtering_bound_logger(log_level),
-        processors=[
-            structlog.contextvars.merge_contextvars,
-            structlog.processors.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.dev.ConsoleRenderer()
-            if settings.app_env == "development"
-            else structlog.processors.JSONRenderer(),
-        ],
-        logger_factory=structlog.PrintLoggerFactory(),
-    )
-
-    # Also configure the stdlib root logger so third-party libraries participate.
-    logging.basicConfig(level=log_level)
 
 
 def create_app() -> FastAPI:
@@ -71,7 +52,7 @@ def create_app() -> FastAPI:
         )
         raise
 
-    _configure_logging(settings)
+    configure_logging(log_level=settings.log_level, app_env=settings.app_env)
 
     app = FastAPI(
         title="ForgeGuard",
@@ -85,6 +66,24 @@ def create_app() -> FastAPI:
         redoc_url="/api/v1/redoc",
         openapi_url="/api/v1/openapi.json",
     )
+
+    # ------------------------------------------------------------------ #
+    # Middleware pipeline
+    #
+    # FastAPI/Starlette builds the stack in reverse-registration order:
+    # the LAST add_middleware call becomes the OUTERMOST layer (runs first).
+    #
+    # Desired order (outermost → innermost):
+    #   1. RequestIDMiddleware    — assigns UUID, clears stale context
+    #   2. RequestLoggingMiddleware — binds actor/resource/operation, logs lifecycle
+    #   3. … future middleware stages …
+    #   4. Route handler
+    #
+    # Therefore we register them innermost-first (LoggingMiddleware before
+    # RequestIDMiddleware).
+    # ------------------------------------------------------------------ #
+    app.add_middleware(RequestLoggingMiddleware)  # registered first → innermost
+    app.add_middleware(RequestIDMiddleware)       # registered second → outermost
 
     # ------------------------------------------------------------------ #
     # Health endpoints
