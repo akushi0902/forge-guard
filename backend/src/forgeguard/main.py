@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from forgeguard.api.routes.admin import router as admin_router
+from forgeguard.api.routes.auth import router as auth_router
 from forgeguard.api.routes.platform import router as platform_router
 from forgeguard.api.routes.system import router as system_router
 from forgeguard.core.config import Settings, get_settings
@@ -141,6 +142,9 @@ def create_app() -> FastAPI:
 
     # Also accessible at /api/v1/* for Nginx reverse-proxy path (/api/ → backend).
     app.include_router(system_router, prefix="/api/v1", include_in_schema=False)
+
+    # Auth endpoints: user registration (requires Platform Admin role).
+    app.include_router(auth_router)
 
     # Admin endpoints: prompt template CRUD (requires Platform Admin role).
     app.include_router(admin_router)
