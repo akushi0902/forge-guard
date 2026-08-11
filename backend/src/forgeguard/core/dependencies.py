@@ -179,6 +179,17 @@ async def get_demo_app_service(
     return DemoAppService(repo)
 
 
+async def get_data_subject_service(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    from forgeguard.data.repositories.audit_logs import AuditLogRepository  # noqa: PLC0415
+    from forgeguard.services.audit import AuditService  # noqa: PLC0415
+    from forgeguard.services.data_subject import DataSubjectService  # noqa: PLC0415
+
+    audit_service = AuditService(AuditLogRepository(pool))
+    return DataSubjectService(pool, audit_service)
+
+
 __all__ = [
     "SettingsDep",
     "get_settings",
@@ -194,4 +205,5 @@ __all__ = [
     "get_refresh_token_repository",
     "get_demo_transaction_repository",
     "get_demo_app_service",
+    "get_data_subject_service",
 ]

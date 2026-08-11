@@ -266,3 +266,10 @@
 - **Files:** 10 (+2363/-5)
 - **Duration:** 889ss
 - **Approach:** Implemented the full retention purge stack bottom-up: (1) crypto_erasure.py provides async JSONB and TEXT overwrite with os.urandom(32) before DELETE; (2) RetentionService orchestrates all six purge methods with batched deletes (1000/batch), READ COMMITTED isolation, DB-server clock for cutoffs, and best-effort audit logging via AuditService; (3) SchedulerService wraps APScheduler AsyncIOScheduler with 7 CronTrigger jobs at staggered UTC times (01:00–04:30); (4) FastAPI lifespan starts/stops the scheduler guarded by scheduler_enabled config; (5) six retention_*_days fields and scheduler_enabled added to Settings; (6) apscheduler>=3.10 added to pyproject.toml. Partition lifecycle delegates to the already-deployed PL/pgSQL functions create_audit_partition and drop_expired_audit_partitions from migration 0002, using the correct audit_logs_YYYY_MM naming convention.
+
+## WO-034: User Story: WO-034 - Implement GDPR Data Subject Rights API Endpoints
+- **Status:** completed
+- **Commit:** `01df999`
+- **Files:** 11 (+1890/-0)
+- **Duration:** 866ss
+- **Approach:** Implemented four GDPR data subject rights endpoints under /api/v1/users/me/data. DataSubjectService uses asyncpg pool directly (bypasses UserRepository._ALLOWED_UPDATE restriction on email) with SERIALIZABLE transaction isolation for erasure. Migration 000a extends the audit immutability trigger with a narrow GDPR exception (actor_id → ANONYMIZED_USER_UUID only) and seeds the anonymized placeholder user. The get_current_user dependency reads the httpOnly access_token cookie and decodes the JWT.
