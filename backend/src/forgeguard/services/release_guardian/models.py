@@ -6,9 +6,11 @@ to JSONB and stored in the change_analysis column of release_assessments.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class CVEInfo(BaseModel):
@@ -136,3 +138,69 @@ class DependencyManifest(BaseModel):
     removed_dependencies: list[DependencyChange] = Field(default_factory=list)
     updated_dependencies: list[DependencyChange] = Field(default_factory=list)
     patch: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Risk Scoring models (WO-046)
+# ---------------------------------------------------------------------------
+
+#: Default equal-weight configuration for risk scoring.
+_DEFAULT_WEIGHTS: dict[str, float] = {
+    "code_complexity": 0.25,
+    "test_coverage": 0.25,
+    "dependencies": 0.25,
+    "security": 0.25,
+}
+
+
+class ContributingFactor(BaseModel):
+    """A single metric that contributed to a dimension risk score.
+
+    Used to explain WHY a score is high — stored in contributing_factors JSONB.
+    """
+
+    metric_name: str
+    actual_value: float
+    threshold: float
+    risk_contribution: float
+    dimension: str
+
+
+class RiskScoreResult(BaseModel):
+    """Complete output of the RiskScorer for a single ChangeAnalysisResult.
+
+    Stored via AssessmentScoreRepository with score_type='risk'.
+    overall_score is integer 0-100 (lower is safer).
+    """
+
+    overall_score: int = Field(ge=0, le=100)
+    dimension_scores: dict[str, int]
+    contributing_factors: list[ContributingFactor] = Field(default_factory=list)
+    weights_used: dict[str, float]
+    scored_at: datetime = Field(
+        default_factory=lambda: datetime.now(tz=timezone.utc)
+    )
+
+
+class RiskScoringConfig(BaseModel):
+    """Configuration for the RiskScorer algorithm.
+
+    Weights must sum to exactly 1.0 (validated at model creation).
+    critical_security_floor is the minimum overall_score enforced when the
+    security dimension detects secrets.
+    """
+
+    dimension_weights: dict[str, float] = Field(
+        default_factory=lambda: dict(_DEFAULT_WEIGHTS)
+    )
+    critical_security_floor: int = Field(default=70, ge=0, le=100)
+
+    @field_validator("dimension_weights")
+    @classmethod
+    def weights_must_sum_to_one(cls, v: dict[str, float]) -> dict[str, float]:
+        total = sum(Decimal(str(w)) for w in v.values())
+        if abs(total - Decimal("1.0")) > Decimal("0.0001"):
+            raise ValueError(
+                f"dimension_weights must sum to 1.0, got {float(total):.6f}"
+            )
+        return v

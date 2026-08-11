@@ -273,3 +273,10 @@
 - **Files:** 11 (+1890/-0)
 - **Duration:** 866ss
 - **Approach:** Implemented four GDPR data subject rights endpoints under /api/v1/users/me/data. DataSubjectService uses asyncpg pool directly (bypasses UserRepository._ALLOWED_UPDATE restriction on email) with SERIALIZABLE transaction isolation for erasure. Migration 000a extends the audit immutability trigger with a narrow GDPR exception (actor_id → ANONYMIZED_USER_UUID only) and seeds the anonymized placeholder user. The get_current_user dependency reads the httpOnly access_token cookie and decodes the JWT.
+
+## WO-046: User Story: WO-046 - Deterministic Release Risk Score Calculator
+- **Status:** completed
+- **Commit:** `68310a9`
+- **Files:** 16 (+1832/-1)
+- **Duration:** 1023ss
+- **Approach:** Implemented a deterministic four-dimension risk scoring pipeline. Each dimension (code_complexity, coverage, dependencies, security) has a dedicated scorer that maps Pydantic metrics to a 0-100 integer using bucket thresholds. RiskScorer orchestrates them with configurable weights (default 0.25 each), uses Decimal arithmetic with ROUND_HALF_UP to avoid float drift, clamps the result to [0,100], and enforces a critical security floor of 70 when secrets are detected. The assessment_scores table was already present (WO-009); a thin AssessmentScoreRepository wrapper was added. Ten pre-computed regression fixtures plus boundary-value unit tests guard the algorithm against accidental drift.
