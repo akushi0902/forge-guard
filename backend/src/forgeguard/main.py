@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from forgeguard.api.routes.admin import router as admin_router
+from forgeguard.api.routes.platform import router as platform_router
 from forgeguard.api.routes.system import router as system_router
 from forgeguard.core.config import Settings, get_settings
 from forgeguard.core.error_handlers import register_error_handlers
@@ -124,6 +125,9 @@ def create_app() -> FastAPI:
 
     # Admin endpoints: prompt template CRUD (requires Platform Admin role).
     app.include_router(admin_router)
+
+    # Platform observability endpoints (Operator/Admin role required).
+    app.include_router(platform_router)
 
     # Root stub retained for backward compatibility.
     @app.get("/", tags=["system"], summary="Root liveness probe")
