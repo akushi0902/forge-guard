@@ -301,3 +301,10 @@
 - **Files:** 9 (+972/-12)
 - **Duration:** 657ss
 - **Approach:** Implemented as a pure ASGI middleware class (AuthenticationMiddleware) to avoid BaseHTTPMiddleware overhead. Uses a PUBLIC_PATHS frozenset for O(1) path matching. Extracts access_token from httpOnly cookies, calls decode_access_token from core/security.py, distinguishes expired vs tampered errors for specific 401 messages, and attaches user_id/user_role to request.state. Registered between CORSMiddleware (pos 4) and SecurityHeadersMiddleware (pos 6) in main.py. The change_password flow follows existing AuthService patterns: verifies current password, runs validate_password_strength, calls a new dedicated update_password method on UserRepository, then revokes all refresh tokens via revoke_all_for_user for full session invalidation.
+
+## WO-024: User Story: WO-024 - Implement Brute-Force Protection with Account Lockout
+- **Status:** completed
+- **Commit:** `e634ecb`
+- **Files:** 5 (+826/-18)
+- **Duration:** 593ss
+- **Approach:** Extended authenticate_user in AuthService with a full brute-force protection flow: (1) lockout checked before credential validation to enforce lockout even for right-password attempts on locked accounts, (2) atomic SQL increment_failed_attempts returns new count which is checked modulo 5 to detect lockout threshold, (3) calculate_lockout_duration() is a pure function implementing min(2^(n-1)*60, 1800)s formula, (4) reset_failed_attempts clears both counter and locked_until on successful login. Added two atomic SQL methods to UserRepository (increment returns new count via RETURNING, reset clears locked_until). RateLimiterMiddleware was already fully implemented (token bucket, 10/min auth, 100/min general, Retry-After, eviction) — no changes needed. main.py registration was already in place at position 3.

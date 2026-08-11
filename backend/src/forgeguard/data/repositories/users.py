@@ -112,6 +112,25 @@ class UserRepository(BaseRepository):
         async with self._pool.acquire() as conn:
             await conn.execute(q, locked_until, uuid.UUID(str(id)))
 
+    async def increment_failed_attempts(self, id: str | uuid.UUID) -> int:
+        """Atomically increment the failed login counter.  Returns the new count."""
+        q = (
+            "UPDATE users SET failed_login_attempts = failed_login_attempts + 1, updated_at = NOW() "
+            "WHERE id = $1 AND deleted_at IS NULL RETURNING failed_login_attempts"
+        )
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(q, uuid.UUID(str(id)))
+        return int(row["failed_login_attempts"]) if row else 0
+
+    async def reset_failed_attempts(self, id: str | uuid.UUID) -> None:
+        """Reset the failed login counter to 0 and clear any lockout."""
+        q = (
+            "UPDATE users SET failed_login_attempts = 0, locked_until = NULL, updated_at = NOW() "
+            "WHERE id = $1 AND deleted_at IS NULL"
+        )
+        async with self._pool.acquire() as conn:
+            await conn.execute(q, uuid.UUID(str(id)))
+
     async def update_password(self, id: str | uuid.UUID, password_hash: str) -> None:
         """Update a user's password hash.  Security-sensitive — dedicated method."""
         q = (

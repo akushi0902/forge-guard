@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
 import structlog
@@ -28,6 +28,33 @@ logger = structlog.get_logger(__name__)
 
 # Generic message used for ALL login failures to prevent user enumeration.
 _INVALID_CREDENTIALS_MSG = "Invalid email or password."
+_LOCKED_MSG = "Account temporarily locked. Try again later."
+
+# Lock threshold: number of consecutive failures before lockout.
+_LOCKOUT_THRESHOLD = 5
+
+
+def calculate_lockout_duration(lockout_count: int) -> timedelta:
+    """Return the lockout duration for the given lockout occurrence.
+
+    Formula: min(2^(n-1) * 60, 1800) seconds, where n is the lockout count.
+
+    Examples:
+        1st lockout → 60s (1 min)
+        2nd lockout → 120s (2 min)
+        3rd lockout → 240s (4 min)
+        Cap at 1800s (30 min)
+    """
+    seconds = min(2 ** (lockout_count - 1) * 60, 1800)
+    return timedelta(seconds=seconds)
+
+
+def _mask_email(email: str) -> str:
+    """Mask email for safe structured logging: 'a***@example.com'."""
+    if "@" not in email:
+        return "***"
+    local, domain = email.split("@", 1)
+    return f"{local[:1]}***@{domain}"
 
 
 class AuthService:
@@ -140,30 +167,59 @@ class AuthService:
         candidate_hash = user["password_hash"] if user else "$2b$12$" + "x" * 53
         is_valid = verify_password(password, candidate_hash)
 
+        # Check lockout before inspecting credentials (WO-024).
+        # Non-existent users skip this to avoid revealing account existence.
+        if user is not None:
+            locked_until = user.get("locked_until")
+            if locked_until is not None:
+                if isinstance(locked_until, datetime) and locked_until.tzinfo is None:
+                    locked_until = locked_until.replace(tzinfo=timezone.utc)
+                if isinstance(locked_until, datetime) and locked_until > datetime.now(tz=timezone.utc):
+                    logger.warning(
+                        "auth.login.failed",
+                        reason="account_locked",
+                        email_masked=_mask_email(email),
+                        user_id=str(user["id"]),
+                    )
+                    raise UnauthorizedError(_LOCKED_MSG)
+
         if not user or not is_valid:
-            logger.warning(
-                "auth.login.failed",
-                reason="invalid_credentials",
-                email_domain=email.split("@")[-1] if "@" in email else "unknown",
-            )
+            if user is not None:
+                # Atomically increment and check threshold for real users.
+                new_count = await self._repo.increment_failed_attempts(user["id"])
+                logger.info(
+                    "auth.login.failed",
+                    reason="invalid_credentials",
+                    email_masked=_mask_email(email),
+                    attempt_count=new_count,
+                    user_id=str(user["id"]),
+                )
+                if new_count > 0 and new_count % _LOCKOUT_THRESHOLD == 0:
+                    lockout_count = new_count // _LOCKOUT_THRESHOLD
+                    duration = calculate_lockout_duration(lockout_count)
+                    locked_until_new = datetime.now(tz=timezone.utc) + duration
+                    await self._repo.lock_account(user["id"], locked_until_new)
+                    logger.warning(
+                        "auth.login.account_locked",
+                        email_masked=_mask_email(email),
+                        user_id=str(user["id"]),
+                        lockout_seconds=int(duration.total_seconds()),
+                        attempt_count=new_count,
+                    )
+            else:
+                logger.warning(
+                    "auth.login.failed",
+                    reason="invalid_credentials",
+                    email_domain=email.split("@")[-1] if "@" in email else "unknown",
+                )
             raise UnauthorizedError(_INVALID_CREDENTIALS_MSG)
 
         if not user.get("is_active", True):
             logger.warning("auth.login.failed", reason="inactive_account", user_id=str(user["id"]))
             raise UnauthorizedError(_INVALID_CREDENTIALS_MSG)
 
-        locked_until = user.get("locked_until")
-        if locked_until is not None:
-            if isinstance(locked_until, datetime):
-                if locked_until.tzinfo is None:
-                    locked_until = locked_until.replace(tzinfo=timezone.utc)
-                if locked_until > datetime.now(tz=timezone.utc):
-                    logger.warning(
-                        "auth.login.failed",
-                        reason="account_locked",
-                        user_id=str(user["id"]),
-                    )
-                    raise UnauthorizedError("Account is temporarily locked. Please try again later.")
+        # Successful login: reset the failed attempt counter (WO-024).
+        await self._repo.reset_failed_attempts(user["id"])
 
         access_token = create_access_token(
             user_id=user["id"],
