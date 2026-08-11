@@ -57,6 +57,10 @@ from forgeguard.data.models.assessments import (  # noqa: E402, F401
     ReleaseAssessment,
     ReleaseDecision,
 )
+from forgeguard.data.models.remediation import (  # noqa: E402, F401
+    FindingException,
+    RemediationRecommendation,
+)
 
 __all__ = [
     "AIConversation",
@@ -65,6 +69,7 @@ __all__ = [
     "AuditLog",
     "Base",
     "Finding",
+    "FindingException",
     "Permission",
     "Policy",
     "PolicyRule",
@@ -72,6 +77,7 @@ __all__ = [
     "RefreshToken",
     "ReleaseAssessment",
     "ReleaseDecision",
+    "RemediationRecommendation",
     "Role",
     "RolePermission",
     "Service",

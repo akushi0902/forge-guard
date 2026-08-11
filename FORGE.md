@@ -168,3 +168,10 @@
 - **Files:** 5 (+2069/-0)
 - **Duration:** 644ss
 - **Approach:** Created five SQLAlchemy 2.0 ORM models (Assessment, AssessmentScore, Finding, ReleaseAssessment, ReleaseDecision) in a new assessments.py module using Mapped/mapped_column style. All categorical columns use VARCHAR + CHECK constraints instead of PostgreSQL ENUMs. JSONB is used for dimension_scores, contributing_factors, evidence, change_analysis, and ai_explanation. ReleaseDecision has no updated_at column and the Alembic migration includes a REVOKE UPDATE statement in a best-effort DO block. Alembic migration chains from d4e5f6a7b8c9 (prompt_templates) to e5f6a7b8c9d0. SQL fixtures provide a complete Payment Service assessment lifecycle. Unit tests follow the same pattern as test_governance_schema.py with a DB availability guard.
+
+## WO-010: User Story: WO-010 - Remediation Domain Schema for Recommendations and Exceptions
+- **Status:** completed
+- **Commit:** `e8009b4`
+- **Files:** 5 (+1080/-0)
+- **Duration:** 366ss
+- **Approach:** Created two SQLAlchemy 2.0 ORM models in a new remediation.py module using Mapped/mapped_column style. RemediationRecommendation uses ON DELETE CASCADE from findings (recommendations are owned by the finding). FindingException (Python class name avoids shadowing built-in Exception; table name is 'exceptions') uses ON DELETE RESTRICT to preserve the audit trail. All categorical columns use VARCHAR + CHECK constraints. DECIMAL(3,2) for confidence_score (0.00-1.00 scale, distinct from 0-100 health scores). expires_at and justification are NOT NULL per business rules. Alembic migration chains from e5f6a7b8c9d0 (assessments schema) to f6a7b8c9d0e1.
