@@ -23,6 +23,7 @@ dependencies = [
     "prometheus-client>=0.20",
     "cryptography>=42.0",
     "PyYAML>=6.0",
+    "apscheduler>=3.10",
 ]
 
 [project.optional-dependencies]

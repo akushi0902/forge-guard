@@ -212,6 +212,41 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------ #
+    # Data Retention (WO-032)
+    # ------------------------------------------------------------------ #
+    retention_audit_days: int = Field(
+        default=365,
+        description="Days to retain audit_logs partitions before dropping.",
+    )
+    retention_assessment_days: int = Field(
+        default=180,
+        description="Days to retain assessment_scores records before purge.",
+    )
+    retention_findings_days: int = Field(
+        default=180,
+        description="Days to retain findings records before purge.",
+    )
+    retention_release_decisions_days: int = Field(
+        default=365,
+        description="Days to retain release_decisions records before purge.",
+    )
+    retention_ai_conversations_days: int = Field(
+        default=90,
+        description="Days to retain ai_conversations records before purge.",
+    )
+    retention_exceptions_days: int = Field(
+        default=30,
+        description="Days after expires_at to purge exception records.",
+    )
+    scheduler_enabled: bool = Field(
+        default=True,
+        description=(
+            "Enable the APScheduler retention purge scheduler. "
+            "Set SCHEDULER_ENABLED=false in test environments to disable."
+        ),
+    )
+
+    # ------------------------------------------------------------------ #
     # Observability
     # ------------------------------------------------------------------ #
     log_level: str = Field(

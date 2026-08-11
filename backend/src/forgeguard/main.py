@@ -46,15 +46,22 @@ logger = structlog.get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage asyncpg connection pool lifecycle.
-
-    Initialises the pool on startup and drains it on shutdown so all in-flight
-    queries can complete before the process exits.
-    """
+    """Manage asyncpg connection pool and retention scheduler lifecycle."""
     from forgeguard.data.database import close_pool, init_pool  # noqa: PLC0415
+    from forgeguard.services.scheduler import SchedulerService  # noqa: PLC0415
 
+    settings = get_settings()
     await init_pool()
+
+    scheduler: SchedulerService | None = None
+    if settings.scheduler_enabled:
+        scheduler = SchedulerService(settings)
+        scheduler.start()
+
     yield
+
+    if scheduler is not None:
+        scheduler.shutdown(wait=True)
     await close_pool()
 
 

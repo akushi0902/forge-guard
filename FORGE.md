@@ -259,3 +259,10 @@
 - **Files:** 13 (+1762/-14)
 - **Duration:** 745ss
 - **Approach:** Extended existing auth infrastructure with JWT issuance and refresh token rotation. JWT tokens are HS256-signed using a secret loaded from settings (never hardcoded), contain only sub/role/exp/iat/jti (no PII), and are delivered via httpOnly Secure SameSite=Strict cookies. Refresh tokens are generated with secrets.token_urlsafe(64) and stored as SHA-256 hex digests only — raw tokens never persist. Token rotation uses a replaced_by_id self-referential FK to maintain rotation chains. Reuse detection revokes the entire token family. Authentication is timing-safe by always calling verify_password even for non-existent users.
+
+## WO-032: User Story: WO-032 - Implement Automated Data Retention Purge Scheduler
+- **Status:** completed
+- **Commit:** `9695b1d`
+- **Files:** 10 (+2363/-5)
+- **Duration:** 889ss
+- **Approach:** Implemented the full retention purge stack bottom-up: (1) crypto_erasure.py provides async JSONB and TEXT overwrite with os.urandom(32) before DELETE; (2) RetentionService orchestrates all six purge methods with batched deletes (1000/batch), READ COMMITTED isolation, DB-server clock for cutoffs, and best-effort audit logging via AuditService; (3) SchedulerService wraps APScheduler AsyncIOScheduler with 7 CronTrigger jobs at staggered UTC times (01:00–04:30); (4) FastAPI lifespan starts/stops the scheduler guarded by scheduler_enabled config; (5) six retention_*_days fields and scheduler_enabled added to Settings; (6) apscheduler>=3.10 added to pyproject.toml. Partition lifecycle delegates to the already-deployed PL/pgSQL functions create_audit_partition and drop_expired_audit_partitions from migration 0002, using the correct audit_logs_YYYY_MM naming convention.
