@@ -45,8 +45,14 @@ from forgeguard.data.models.governance import (  # noqa: E402, F401
     PolicyRule,
     Service,
 )
+from forgeguard.data.models.audit import (  # noqa: E402, F401
+    AIConversation,
+    AuditLog,
+)
 
 __all__ = [
+    "AIConversation",
+    "AuditLog",
     "Base",
     "Permission",
     "Policy",
