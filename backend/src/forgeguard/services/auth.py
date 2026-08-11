@@ -9,13 +9,14 @@ from typing import TYPE_CHECKING, Any, Optional
 import structlog
 
 from forgeguard.api.schemas.auth import LoginResponse, UserRegisterRequest, UserResponse
-from forgeguard.core.exceptions import ConflictError, UnauthorizedError
+from forgeguard.core.exceptions import BadRequestError, ConflictError, UnauthorizedError
 from forgeguard.core.security import (
     REFRESH_TOKEN_TTL,
     create_access_token,
     generate_refresh_token,
     hash_password,
     hash_refresh_token,
+    validate_password_strength,
     verify_password,
 )
 from forgeguard.data.repositories.users import UserRepository
@@ -299,6 +300,57 @@ class AuthService:
         if existing is not None and existing.get("revoked_at") is None:
             await self._rt_repo.revoke(uuid.UUID(str(existing["id"])))
             logger.info("auth.logout.success", user_id=str(existing["user_id"]))
+
+    # ------------------------------------------------------------------
+    # Password change
+    # ------------------------------------------------------------------
+
+    async def change_password(
+        self,
+        user_id: uuid.UUID,
+        current_password: str,
+        new_password: str,
+    ) -> None:
+        """Change a user's password and revoke all refresh tokens.
+
+        Full session invalidation: every active refresh token for the user is
+        revoked so existing sessions cannot be silently renewed.
+
+        Args:
+            user_id:          The authenticated user's UUID.
+            current_password: The user's current raw password for verification.
+            new_password:     The desired new password (subject to policy check).
+
+        Raises:
+            UnauthorizedError: If the user record cannot be found.
+            BadRequestError:   If current_password is wrong or new_password
+                               violates the password policy.
+        """
+        user = await self._repo.get_by_id(user_id)
+        if user is None:
+            raise UnauthorizedError("Authentication required.")
+
+        if not verify_password(current_password, user["password_hash"]):
+            logger.warning(
+                "auth.change_password.wrong_current",
+                user_id=str(user_id),
+            )
+            raise BadRequestError("Current password is incorrect")
+
+        violations = validate_password_strength(new_password)
+        if violations:
+            raise BadRequestError(
+                "New password does not meet requirements",
+                details={"violations": violations},
+            )
+
+        new_hash = hash_password(new_password)
+        await self._repo.update_password(user_id, new_hash)
+
+        if self._rt_repo is not None:
+            await self._rt_repo.revoke_all_for_user(user_id)
+
+        logger.info("auth.change_password.success", user_id=str(user_id))
 
     # ------------------------------------------------------------------
     # Private helpers

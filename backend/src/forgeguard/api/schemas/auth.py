@@ -83,6 +83,19 @@ class UserRegisterRequest(ForgeGuardBaseModel):
         return v
 
 
+class ChangePasswordRequest(ForgeGuardBaseModel):
+    """Payload for POST /api/v1/auth/change-password."""
+
+    current_password: str = Field(
+        min_length=1,
+        description="The user's current password for verification.",
+    )
+    new_password: str = Field(
+        min_length=1,
+        description="The desired new password (must satisfy the password policy).",
+    )
+
+
 class UserResponse(ForgeGuardBaseModel):
     """Representation of a User record returned to callers.
 

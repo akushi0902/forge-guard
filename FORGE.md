@@ -294,3 +294,10 @@
 - **Files:** 3 (+1047/-0)
 - **Duration:** 761ss
 - **Approach:** Created a compliance test suite that tests audit log completeness by exercising AuditService.log_event() and log_mutation() directly (since the mutation HTTP endpoints for services/policies/etc. are not yet implemented). The assert_audit_record_created helper counts audit_logs rows before/after each operation and returns the new record. Tests cover all required mutation categories and auth events, verify all required fields, test the completeness 1:1 ratio, and verify immutability via the database trigger (migration b8c9d0e1f2a3). A compliance conftest.py provides asyncpg_pool, audit_clean (truncate), and audit_service fixtures scoped to the compliance directory.
+
+## WO-023: User Story: WO-023 - Implement JWT Authentication Middleware for Protected Routes
+- **Status:** completed
+- **Commit:** `8fd6805`
+- **Files:** 9 (+972/-12)
+- **Duration:** 657ss
+- **Approach:** Implemented as a pure ASGI middleware class (AuthenticationMiddleware) to avoid BaseHTTPMiddleware overhead. Uses a PUBLIC_PATHS frozenset for O(1) path matching. Extracts access_token from httpOnly cookies, calls decode_access_token from core/security.py, distinguishes expired vs tampered errors for specific 401 messages, and attaches user_id/user_role to request.state. Registered between CORSMiddleware (pos 4) and SecurityHeadersMiddleware (pos 6) in main.py. The change_password flow follows existing AuthService patterns: verifies current password, runs validate_password_strength, calls a new dedicated update_password method on UserRepository, then revokes all refresh tokens via revoke_all_for_user for full session invalidation.

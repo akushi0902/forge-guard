@@ -36,6 +36,7 @@ from forgeguard.core.error_handlers import register_error_handlers
 from forgeguard.core.logging import configure_logging
 from forgeguard.middleware.audit import AuditWriterMiddleware
 from forgeguard.middleware.audit_prehook import AuditPreHookMiddleware
+from forgeguard.middleware.authentication import AuthenticationMiddleware
 from forgeguard.middleware.logging import RequestLoggingMiddleware
 from forgeguard.middleware.metrics import MetricsMiddleware
 from forgeguard.middleware.rate_limiter import RateLimiterMiddleware
@@ -114,13 +115,13 @@ def create_app() -> FastAPI:
     #   2. RequestLoggingMiddleware  — binds actor/resource/operation, logs lifecycle
     #   3. RateLimiterMiddleware     — token bucket per-IP rate limiting
     #   4. CORSMiddleware            — CORS headers, pre-flight handling
-    #   5. SecurityHeadersMiddleware — inject 7 security headers on all responses
-    #   6. MetricsMiddleware         — records Prometheus counters & histograms
+    #   5. AuthenticationMiddleware  — JWT cookie validation, user context attachment
+    #   6. SecurityHeadersMiddleware — inject 7 security headers on all responses
+    #   7. MetricsMiddleware         — records Prometheus counters & histograms
+    #   8. AuditWriterMiddleware     — persists audit record post-2xx mutation
     #   9. AuditPreHookMiddleware    — captures before-state for mutation requests
     #  10. Route handler
     #
-    # FastAPI/Starlette builds the stack in reverse-registration order:
-    # the LAST add_middleware call becomes the OUTERMOST layer (runs first).
     # Therefore we register them innermost-first.
     # ------------------------------------------------------------------ #
     # ------------------------------------------------------------------ #
@@ -143,18 +144,22 @@ def create_app() -> FastAPI:
         AuditWriterMiddleware,
         audit_service_factory=_audit_service_factory,
     )
-    app.add_middleware(MetricsMiddleware)           # registered 3rd → pos 6
-    app.add_middleware(SecurityHeadersMiddleware)   # registered 3rd → pos 5
-    app.add_middleware(                             # registered 4th → pos 4
+    app.add_middleware(MetricsMiddleware)           # registered 3rd → pos 7
+    app.add_middleware(SecurityHeadersMiddleware)   # registered 4th → pos 6
+    app.add_middleware(                             # registered 5th → pos 5
+        AuthenticationMiddleware,
+        jwt_secret=settings.jwt_secret_key,
+    )
+    app.add_middleware(                             # registered 6th → pos 4
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
         allow_credentials=True,
         allow_methods=settings.cors_allow_methods,
         allow_headers=settings.cors_allow_headers,
     )
-    app.add_middleware(RateLimiterMiddleware)       # registered 5th → pos 3
-    app.add_middleware(RequestLoggingMiddleware)    # registered 6th → pos 2
-    app.add_middleware(RequestIDMiddleware)         # registered 7th → outermost (pos 1)
+    app.add_middleware(RateLimiterMiddleware)       # registered 7th → pos 3
+    app.add_middleware(RequestLoggingMiddleware)    # registered 8th → pos 2
+    app.add_middleware(RequestIDMiddleware)         # registered 9th → outermost (pos 1)
 
     # ------------------------------------------------------------------ #
     # Routers

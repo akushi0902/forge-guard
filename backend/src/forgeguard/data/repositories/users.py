@@ -112,6 +112,15 @@ class UserRepository(BaseRepository):
         async with self._pool.acquire() as conn:
             await conn.execute(q, locked_until, uuid.UUID(str(id)))
 
+    async def update_password(self, id: str | uuid.UUID, password_hash: str) -> None:
+        """Update a user's password hash.  Security-sensitive — dedicated method."""
+        q = (
+            "UPDATE users SET password_hash = $1, updated_at = NOW() "
+            "WHERE id = $2 AND deleted_at IS NULL"
+        )
+        async with self._pool.acquire() as conn:
+            await conn.execute(q, password_hash, uuid.UUID(str(id)))
+
     async def check_permissions(self, user_id: str | uuid.UUID) -> list[str]:
         q = """
             SELECT p.name

@@ -19,7 +19,9 @@ import structlog
 from fastapi import APIRouter, Cookie, Depends, Request, Response
 from fastapi.responses import JSONResponse
 
+from forgeguard.api.dependencies.auth import CurrentUserDep
 from forgeguard.api.schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
     LoginResponse,
     UserRegisterRequest,
@@ -28,7 +30,7 @@ from forgeguard.api.schemas.auth import (
 from forgeguard.core.config import get_settings
 from forgeguard.core.cookies import clear_auth_cookies, set_auth_cookies
 from forgeguard.core.dependencies import get_refresh_token_repository, get_user_repository
-from forgeguard.core.exceptions import ForbiddenError, UnauthorizedError
+from forgeguard.core.exceptions import BadRequestError, ForbiddenError, UnauthorizedError
 from forgeguard.core.security import validate_password_strength
 from forgeguard.data.repositories.refresh_tokens import RefreshTokenRepository
 from forgeguard.data.repositories.users import UserRepository
@@ -207,3 +209,35 @@ async def logout(
         await service.logout(refresh_token)
     clear_auth_cookies(response)
     return {"message": "Logged out"}
+
+
+@router.post(
+    "/change-password",
+    status_code=200,
+    summary="Change password with full session invalidation",
+    responses={
+        200: {"description": "Password changed; all sessions invalidated"},
+        400: {"description": "Wrong current password or new password policy violation"},
+        401: {"description": "Authentication required"},
+    },
+)
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: CurrentUserDep,
+    user_repo: UserRepoDep,
+    rt_repo: RefreshTokenRepoDep,
+) -> dict:
+    """Change the authenticated user's password and revoke all refresh tokens.
+
+    Validates the current password, enforces the password policy on the new
+    password, updates the stored hash, and revokes every active refresh token
+    for the user so that existing sessions cannot be silently renewed.
+    """
+    settings = get_settings()
+    service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key)
+    await service.change_password(
+        user_id=current_user.user_id,
+        current_password=body.current_password,
+        new_password=body.new_password,
+    )
+    return {"message": "Password changed successfully. All sessions have been invalidated."}
