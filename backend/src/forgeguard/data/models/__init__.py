@@ -40,12 +40,20 @@ from forgeguard.data.models.identity import (  # noqa: E402, F401
     RolePermission,
     User,
 )
+from forgeguard.data.models.governance import (  # noqa: E402, F401
+    Policy,
+    PolicyRule,
+    Service,
+)
 
 __all__ = [
     "Base",
     "Permission",
+    "Policy",
+    "PolicyRule",
     "RefreshToken",
     "Role",
     "RolePermission",
+    "Service",
     "User",
 ]
