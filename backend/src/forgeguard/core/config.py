@@ -70,6 +70,54 @@ class Settings(BaseSettings):
         default="",
         description="API key for the configured LLM provider. Leave empty to disable AI features.",
     )
+    llm_base_url: str = Field(
+        default="https://api.openai.com/v1",
+        description="Base URL for the LLM provider API (OpenAI-compatible endpoint).",
+    )
+    llm_model: str = Field(
+        default="gpt-4o-mini",
+        description="LLM model identifier to use for completions.",
+    )
+    llm_timeout_seconds: int = Field(
+        default=30,
+        description="HTTP timeout in seconds for LLM provider requests.",
+    )
+    llm_temperature: float = Field(
+        default=0.7,
+        description="Sampling temperature for LLM completions (0.0–2.0).",
+    )
+    llm_max_tokens: int = Field(
+        default=2048,
+        description="Maximum number of tokens to generate per LLM completion.",
+    )
+
+    # ------------------------------------------------------------------ #
+    # Circuit Breaker
+    # ------------------------------------------------------------------ #
+    circuit_breaker_failure_threshold: int = Field(
+        default=5,
+        description="Number of failures in the window that opens the circuit breaker.",
+    )
+    circuit_breaker_window_seconds: int = Field(
+        default=60,
+        description="Rolling window (seconds) in which failures are counted.",
+    )
+    circuit_breaker_recovery_seconds: int = Field(
+        default=30,
+        description="Seconds to wait in OPEN state before transitioning to HALF_OPEN.",
+    )
+
+    # ------------------------------------------------------------------ #
+    # AI Response Cache
+    # ------------------------------------------------------------------ #
+    ai_cache_ttl_seconds: int = Field(
+        default=3600,
+        description="TTL in seconds for cached LLM responses (default: 1 hour).",
+    )
+    ai_cache_max_size: int = Field(
+        default=1000,
+        description="Maximum number of LLM responses to hold in the in-memory cache.",
+    )
 
     # ------------------------------------------------------------------ #
     # Forge Platform Integration

@@ -70,3 +70,10 @@
 - **Files:** 6 (+870/-0)
 - **Duration:** 384ss
 - **Approach:** Created ForgeGuardBaseModel with strict=True, extra='forbid', str_strip_whitespace=True as the common base for all domain schemas. Defined four reusable Annotated field types (UUIDField, CommitSHAField, EmailField, ScoreField) with regex patterns and range constraints. Created error_handlers.py with format_validation_errors() that flattens Pydantic v2 loc tuples to dot-notation paths (handling list indices as [N]) and produces the ForgeGuard error contract. Two exception handlers cover RequestValidationError→422 and JSONDecodeError→400, both injecting reference_id from request.state.request_id with a safe fallback if the attribute is absent. Registered via register_error_handlers() called in create_app().
+
+## WO-043: User Story: WO-043 - LLM Provider Abstraction with Circuit Breaker
+- **Status:** completed
+- **Commit:** `fac05ba`
+- **Files:** 18 (+2267/-4)
+- **Duration:** 829ss
+- **Approach:** Built the AI Engine as a layered composition under forgeguard/services/ai_engine/. Bottom layer: models.py (pure dataclasses/enums), errors.py (typed exceptions with no key leakage). Middle layer: abstract LLMProvider ABC, standalone CircuitBreaker (asyncio.Lock + deque-based rolling window, all transitions logged), standalone ResponseCache (OrderedDict LRU + TTL, SHA-256 keys). Provider layer: OpenAIProvider via httpx.AsyncClient with single 429 retry honouring Retry-After. Service layer: AIEngineService composes all three — cache checked before circuit breaker so cached responses survive an open circuit, health_check aggregates all metrics. Wired into DI via get_ai_engine() singleton in core/dependencies.py. All config via Settings (10 new fields).
