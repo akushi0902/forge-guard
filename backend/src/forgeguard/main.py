@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse
 
 from forgeguard.api.routes.system import router as system_router
 from forgeguard.core.config import Settings, get_settings
+from forgeguard.core.error_handlers import register_error_handlers
 from forgeguard.core.logging import configure_logging
 from forgeguard.middleware.logging import RequestLoggingMiddleware
 from forgeguard.middleware.metrics import MetricsMiddleware
@@ -91,6 +92,11 @@ def create_app() -> FastAPI:
     # the LAST add_middleware call becomes the OUTERMOST layer (runs first).
     # Therefore we register them innermost-first.
     # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------ #
+    # Exception handlers
+    # ------------------------------------------------------------------ #
+    register_error_handlers(app)
+
     app.add_middleware(MetricsMiddleware)           # registered 1st → innermost (pos 6)
     app.add_middleware(SecurityHeadersMiddleware)   # registered 2nd → pos 5
     app.add_middleware(                             # registered 3rd → pos 4

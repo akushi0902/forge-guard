@@ -63,3 +63,10 @@
 - **Files:** 5 (+735/-6)
 - **Duration:** 512ss
 - **Approach:** Added CORS configuration fields (CORS_ALLOWED_ORIGINS, CORS_ALLOW_METHODS, CORS_ALLOW_HEADERS) to Settings with a field_validator that raises ValueError on wildcard origins and a cors_origins_list property. Created SecurityHeadersMiddleware as a raw ASGI send-wrapper that intercepts http.response.start events and appends 7 pre-encoded security header tuples, skipping any already present. Registered both CORSMiddleware (pos 4) and SecurityHeadersMiddleware (pos 5) in main.py's reversed-registration middleware pipeline.
+
+## WO-018: User Story: WO-018 - Implement Pydantic Input Validation Error Formatting
+- **Status:** completed
+- **Commit:** `b7d4a7e`
+- **Files:** 6 (+870/-0)
+- **Duration:** 384ss
+- **Approach:** Created ForgeGuardBaseModel with strict=True, extra='forbid', str_strip_whitespace=True as the common base for all domain schemas. Defined four reusable Annotated field types (UUIDField, CommitSHAField, EmailField, ScoreField) with regex patterns and range constraints. Created error_handlers.py with format_validation_errors() that flattens Pydantic v2 loc tuples to dot-notation paths (handling list indices as [N]) and produces the ForgeGuard error contract. Two exception handlers cover RequestValidationError→422 and JSONDecodeError→400, both injecting reference_id from request.state.request_id with a safe fallback if the attribute is absent. Registered via register_error_handlers() called in create_app().
