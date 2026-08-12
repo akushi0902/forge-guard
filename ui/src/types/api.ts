@@ -258,3 +258,52 @@ export interface PlatformLogsResponse {
   entries: PlatformLogEntry[];
   total: number;
 }
+
+// --------------------------------------------------------------------------
+// Engineering Manager Dashboard (WO-078)
+// --------------------------------------------------------------------------
+
+export type TrendDirection = 'up' | 'down' | 'stable';
+
+/** Service with aggregated metrics for the Engineering Manager dashboard. */
+export interface ServiceWithMetrics {
+  id: string;
+  name: string;
+  team: string;
+  description: string | null;
+  repository_url: string | null;
+  health_score: number | null;
+  previous_health_score: number | null;
+  trend_direction: TrendDirection;
+  last_evaluated_at: string | null;
+  critical_findings: number;
+  high_findings: number;
+  medium_findings: number;
+  low_findings: number;
+  avg_ttr_hours: number | null;
+}
+
+export interface ServicesWithMetricsResponse {
+  items: ServiceWithMetrics[];
+  total_count: number;
+}
+
+/** Single monthly data point for the health score trend chart. */
+export interface AssessmentTrendPoint {
+  month: string;
+  avg_score: number;
+  assessment_count: number;
+}
+
+/** Single monthly data point for the resolution rate chart. */
+export interface ResolutionRatePoint {
+  month: string;
+  resolved_count: number;
+  total_count: number;
+  resolution_rate: number;
+}
+
+export interface AssessmentTrendsResponse {
+  trends: AssessmentTrendPoint[];
+  resolution_rates: ResolutionRatePoint[];
+}

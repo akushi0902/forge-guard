@@ -79,11 +79,11 @@ export const platformAdminNav: NavConfigItem[] = [
 // ---------------------------------------------------------------------------
 
 export const engineeringManagerNav: NavConfigItem[] = [
-  { iconName: 'dashboard',  label: 'Dashboard',  path: '/dashboard',  requiredPermission: 'service:read' },
-  { iconName: 'portfolio',  label: 'Portfolio',  path: '/portfolio',  requiredPermission: 'report:read' },
-  { iconName: 'trends',     label: 'Trends',     path: '/trends',     requiredPermission: 'report:read' },
-  { iconName: 'findings',   label: 'Findings',   path: '/findings',   requiredPermission: 'finding:read' },
-  { iconName: 'approvals',  label: 'Approvals',  path: '/approvals',  requiredPermission: 'assessment:approve' },
+  { iconName: 'portfolio',  label: 'Manager Dashboard', path: '/manager-dashboard', requiredPermission: 'report:read' },
+  { iconName: 'dashboard',  label: 'Dev Dashboard',     path: '/dashboard',         requiredPermission: 'service:read' },
+  { iconName: 'trends',     label: 'Trends',            path: '/trends',            requiredPermission: 'report:read' },
+  { iconName: 'findings',   label: 'Findings',          path: '/findings',          requiredPermission: 'finding:read' },
+  { iconName: 'approvals',  label: 'Approvals',         path: '/approvals',         requiredPermission: 'assessment:approve' },
 ];
 
 // ---------------------------------------------------------------------------

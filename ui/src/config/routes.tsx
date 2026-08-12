@@ -172,6 +172,7 @@ const AiAgentPage     = lazy(() => import('@/pages/AiAgentPage').then((m) => ({ 
 const AuditPage       = lazy(() => import('@/pages/AuditPage').then((m) => ({ default: m.AuditPage })));
 const PortfolioPage   = lazy(() => import('@/pages/PortfolioPage').then((m) => ({ default: m.PortfolioPage })));
 const TrendsPage      = lazy(() => import('@/pages/TrendsPage').then((m) => ({ default: m.TrendsPage })));
+const EngineeringManagerDashboard = lazy(() => import('@/pages/EngineeringManager').then((m) => ({ default: m.EngineeringManagerDashboard })));
 const ServicesPage    = lazy(() => import('@/pages/ServicesPage').then((m) => ({ default: m.ServicesPage })));
 const PlatformHealthPage = lazy(() => import('@/pages/PlatformHealthPage').then((m) => ({ default: m.PlatformHealthPage })));
 const MonitoringPage  = lazy(() => import('@/pages/MonitoringPage').then((m) => ({ default: m.MonitoringPage })));
@@ -278,6 +279,10 @@ export const router = createBrowserRouter([
           {
             path: 'trends',
             element: guarded('report:read', <TrendsPage />),
+          },
+          {
+            path: 'manager-dashboard',
+            element: guarded('report:read', <EngineeringManagerDashboard />),
           },
           {
             path: 'services',

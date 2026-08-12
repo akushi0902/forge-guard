@@ -574,3 +574,10 @@
 - **Files:** 16 (+1283/-10)
 - **Duration:** 1032ss
 - **Approach:** Built DeveloperDashboard as the primary landing page for the Developer persona. Service context is managed via URL query param (useSearchParams) for shareability. The page composes StatsGrid (4 StatCards), HealthScoreCard (ScoreRing + 5 DimensionBars), FindingsCard (TabBar + DataTable with MSW-tested queries), and EmptyStateCard (3-step onboarding + CTA). Three separate useServiceFindings calls (all/critical/high) provide accurate total_count values for the stats grid without pagination bias. Skeleton loading, error Alert with Retry, and empty-state detection (null API response) are all handled. DashboardPage.tsx was updated to delegate to DeveloperDashboard. The /dashboard route in routes.tsx now uses a lazy-loaded DeveloperDashboard with guarded('service:read') wrapper.
+
+## WO-078: User Story: WO-078 - Engineering Manager Compliance Trends Dashboard View
+- **Status:** completed
+- **Commit:** `719a62a`
+- **Files:** 23 (+1592/-5)
+- **Duration:** 653ss
+- **Approach:** Built the Engineering Manager Compliance Trends Dashboard as a new page at /manager-dashboard. The page composes 5 sub-components: KPIGrid (4 StatCards computing avg score, services >= 70, critical findings, avg TTR from service data), HealthDistributionCard (Mantine Progress.Root segmented bar with 4 score buckets + legend), TrendChartCard (Recharts BarChart, 6-month avg health scores), ResolutionRateCard (Recharts BarChart, 6-month resolution rates), and ServicesTableCard (sortable Mantine Table with team filter via URL params and client-side CSV export). Two new TanStack Query hooks (useServicesWithScores, useAssessmentTrends) with 60s refetchInterval feed the page. CSV export utility generates PII-free CSVs with proper field escaping. Team filter persists via URL search params. Route uses report:read permission guard. Fixtures include 20 services across 4 teams with 6 months of trend data.
