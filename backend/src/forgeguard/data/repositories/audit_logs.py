@@ -84,6 +84,7 @@ class AuditLogRepository(BaseRepository):
         *,
         actor_id: str | uuid.UUID | None = None,
         resource_type: str | None = None,
+        resource_id: str | uuid.UUID | None = None,
         action: str | None = None,
         after: datetime | None = None,
         before: datetime | None = None,
@@ -100,6 +101,10 @@ class AuditLogRepository(BaseRepository):
         if resource_type is not None:
             q += f" AND resource_type = ${idx}"
             params.append(resource_type)
+            idx += 1
+        if resource_id is not None:
+            q += f" AND resource_id = ${idx}"
+            params.append(uuid.UUID(str(resource_id)))
             idx += 1
         if action is not None:
             q += f" AND action = ${idx}"
@@ -184,6 +189,119 @@ class AuditLogRepository(BaseRepository):
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(q, *params)
         return self._rows(rows)
+
+    async def query_with_filters(
+        self,
+        *,
+        actor_id: str | uuid.UUID | None = None,
+        resource_type: str | None = None,
+        resource_id: str | uuid.UUID | None = None,
+        action: str | None = None,
+        after: datetime | None = None,
+        before: datetime | None = None,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Query audit logs with full filter support including resource_id.
+
+        Uses composite (created_at, id) cursor for correct DESC ordering.
+        Fetch ``limit + 1`` rows to detect has_more without a separate COUNT.
+        """
+        import base64  # noqa: PLC0415
+
+        params: list[Any] = []
+        idx = 1
+        q = "SELECT * FROM audit_logs WHERE TRUE"
+
+        if actor_id is not None:
+            q += f" AND actor_id = ${idx}"
+            params.append(uuid.UUID(str(actor_id)))
+            idx += 1
+        if resource_type is not None:
+            q += f" AND resource_type = ${idx}"
+            params.append(resource_type)
+            idx += 1
+        if resource_id is not None:
+            q += f" AND resource_id = ${idx}"
+            params.append(uuid.UUID(str(resource_id)))
+            idx += 1
+        if action is not None:
+            q += f" AND action = ${idx}"
+            params.append(action)
+            idx += 1
+        if after is not None:
+            q += f" AND created_at >= ${idx}"
+            params.append(after)
+            idx += 1
+        if before is not None:
+            q += f" AND created_at < ${idx}"
+            params.append(before)
+            idx += 1
+
+        if cursor is not None:
+            try:
+                raw = base64.b64decode(cursor.encode()).decode()
+                ts_str, id_str = raw.rsplit("|", 1)
+                from datetime import timezone  # noqa: PLC0415
+                cursor_ts = datetime.fromisoformat(ts_str)
+                if cursor_ts.tzinfo is None:
+                    cursor_ts = cursor_ts.replace(tzinfo=timezone.utc)
+                cursor_id = uuid.UUID(id_str)
+                q += (
+                    f" AND (created_at < ${idx}"
+                    f" OR (created_at = ${idx} AND id < ${idx + 1}))"
+                )
+                params.extend([cursor_ts, cursor_ts, cursor_id])
+                idx += 2
+            except Exception:
+                logger.warning("audit_logs.query_with_filters.invalid_cursor", cursor=cursor)
+
+        q += f" ORDER BY created_at DESC, id DESC LIMIT ${idx}"
+        params.append(limit)
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(q, *params)
+        return self._rows(rows)
+
+    async def stream_records(
+        self,
+        *,
+        actor_id: str | uuid.UUID | None = None,
+        resource_type: str | None = None,
+        resource_id: str | uuid.UUID | None = None,
+        action: str | None = None,
+        after: datetime | None = None,
+        before: datetime | None = None,
+        batch_size: int = 200,
+    ):
+        """Async generator yielding all matching records in batches.
+
+        Uses cursor-based batching so the full result set is never loaded
+        into memory at once — safe for exports up to 100,000+ records.
+        """
+        import base64  # noqa: PLC0415
+
+        cursor: str | None = None
+        while True:
+            rows = await self.query_with_filters(
+                actor_id=actor_id,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                action=action,
+                after=after,
+                before=before,
+                cursor=cursor,
+                limit=batch_size + 1,
+            )
+            has_more = len(rows) > batch_size
+            page = rows[:batch_size]
+            for row in page:
+                yield row
+            if not has_more or not page:
+                break
+            last = page[-1]
+            raw = f"{last['created_at'].isoformat()}|{last['id']}"
+            cursor = base64.b64encode(raw.encode()).decode()
 
     async def query(
         self,

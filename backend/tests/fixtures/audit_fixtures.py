@@ -106,6 +106,119 @@ ALL_SAMPLE_RECORDS: list[dict[str, Any]] = [
 
 
 # ---------------------------------------------------------------------------
+# Large diverse record factory — WO-031 (200+ seeded records)
+# ---------------------------------------------------------------------------
+
+_ACTIONS = [
+    "auth.login",
+    "auth.login_failed",
+    "auth.logout",
+    "auth.token_refresh",
+    "auth.account_locked",
+    "auth.password_changed",
+    "rbac.role_change",
+    "rbac.status_change",
+    "service.created",
+    "service.updated",
+    "service.deleted",
+    "assessment.requested",
+    "assessment.completed",
+    "release.approved",
+    "release.blocked",
+    "policy.created",
+    "policy.updated",
+    "exception.requested",
+    "exception.approved",
+    "user.created",
+]
+
+_RESOURCE_TYPES = [
+    "users",
+    "services",
+    "assessments",
+    "releases",
+    "policies",
+    "exceptions",
+    "audit_logs",
+    "refresh_tokens",
+]
+
+_ROLES = [
+    "developer",
+    "tech_lead",
+    "security_reviewer",
+    "platform_admin",
+    "engineering_manager",
+    "operator",
+]
+
+_IPS = [
+    "10.0.xxx.xxx",
+    "192.168.xxx.xxx",
+    "172.16.xxx.xxx",
+    "203.0.xxx.xxx",
+    "unknown",
+]
+
+# Stable actor UUIDs for cross-test consistency.
+_ACTOR_IDS = [uuid.UUID(f"a{i:07d}-0000-0000-0000-000000000000") for i in range(1, 11)]
+_RESOURCE_IDS = [uuid.UUID(f"b{i:07d}-0000-0000-0000-000000000000") for i in range(1, 21)]
+
+
+def generate_diverse_audit_records(count: int = 220) -> list[dict[str, Any]]:
+    """Generate *count* diverse audit records spanning multiple actors, actions,
+    resource types, and time periods.  Records are deterministic — given the same
+    *count*, the output is always identical, enabling reproducible test assertions.
+    """
+    from datetime import timedelta  # noqa: PLC0415
+
+    base_ts = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    records: list[dict[str, Any]] = []
+
+    for i in range(count):
+        # Spread across 3 months (Jan–Mar 2026).
+        days_offset = (i * 90) // count
+        created_at = base_ts + timedelta(days=days_offset, hours=i % 24, minutes=(i * 7) % 60)
+
+        action = _ACTIONS[i % len(_ACTIONS)]
+        resource_type = _RESOURCE_TYPES[i % len(_RESOURCE_TYPES)]
+        role = _ROLES[i % len(_ROLES)]
+        actor_id = _ACTOR_IDS[i % len(_ACTOR_IDS)]
+        resource_id = _RESOURCE_IDS[i % len(_RESOURCE_IDS)]
+        ip = _IPS[i % len(_IPS)]
+        correlation_id = str(uuid.UUID(f"c{i:07d}-0000-0000-0000-000000000000"))
+
+        before_state: dict[str, Any] | None = None
+        after_state: dict[str, Any] | None = None
+        if "change" in action or "updated" in action:
+            before_state = {"status": "active", "version": i}
+            after_state = {"status": "updated", "version": i + 1}
+        elif action in {"rbac.role_change"}:
+            before_state = {"role": _ROLES[(i + 1) % len(_ROLES)]}
+            after_state = {"role": role}
+
+        records.append({
+            "id": uuid.UUID(f"d{i:07d}-0000-0000-0000-000000000000"),
+            "actor_id": actor_id,
+            "actor_role": role,
+            "action": action,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "before_state": before_state,
+            "after_state": after_state,
+            "ip_address_masked": ip,
+            "correlation_id": correlation_id,
+            "created_at": created_at,
+        })
+
+    return records
+
+
+# 220 pre-generated diverse records for use in tests without a database.
+SEEDED_AUDIT_RECORDS: list[dict[str, Any]] = generate_diverse_audit_records(220)
+
+
+# ---------------------------------------------------------------------------
 # Mock user context objects
 # ---------------------------------------------------------------------------
 

@@ -164,6 +164,14 @@ ROUTE_PERMISSION_MAP: list[RoutePermission] = [
     ),
 
     # ------------------------------------------------------------------
+    # Audit log query API (Platform Admin only — audit.view) (WO-031)
+    # More specific paths first (first-match wins).
+    # ------------------------------------------------------------------
+    RoutePermission("GET", "/api/v1/audit-logs/export", [Permissions.AUDIT_VIEW]),
+    RoutePermission("GET", "/api/v1/audit-logs/*",      [Permissions.AUDIT_VIEW]),
+    RoutePermission("GET", "/api/v1/audit-logs",        [Permissions.AUDIT_VIEW]),
+
+    # ------------------------------------------------------------------
     # Admin — Policy / prompt template management
     # ------------------------------------------------------------------
     RoutePermission("*", "/api/v1/admin/policies",              [Permissions.POLICY_MANAGE]),

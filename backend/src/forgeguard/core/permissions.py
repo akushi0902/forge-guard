@@ -39,6 +39,7 @@ class Permissions:
     RBAC_MANAGE = "rbac.manage"
     HEALTH_MONITOR = "health.monitor"
     TRENDS_VIEW = "trends.view"
+    AUDIT_VIEW = "audit.view"
 
 
 #: Frozenset of every defined permission slug, used by Platform Admin sentinel.
@@ -53,6 +54,7 @@ ALL_PERMISSIONS: frozenset[str] = frozenset({
     Permissions.RBAC_MANAGE,
     Permissions.HEALTH_MONITOR,
     Permissions.TRENDS_VIEW,
+    Permissions.AUDIT_VIEW,
 })
 
 
