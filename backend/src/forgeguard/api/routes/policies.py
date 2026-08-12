@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse
 
 from forgeguard.api.dependencies.audit import get_audit_service
 from forgeguard.api.dependencies.auth import CurrentUser, CurrentUserDep
+from forgeguard.api.schemas.audit import AuditLogEntry, AuditLogListResponse
 from forgeguard.api.schemas.policy import (
     PolicyCreate,
     PolicyListResponse,
@@ -37,6 +38,7 @@ from forgeguard.api.schemas.policy import (
 )
 from forgeguard.core.dependencies import get_pool
 from forgeguard.core.permissions import Permissions, has_permission
+from forgeguard.data.repositories.audit_logs import AuditLogRepository
 from forgeguard.data.repositories.policies import PolicyRepository
 from forgeguard.services.audit import AuditService
 from forgeguard.services.policy_guardian import PolicyGuardianService
@@ -67,6 +69,10 @@ async def get_policy_guardian_service(
     return PolicyGuardianService(repo, audit_svc)
 
 
+async def get_audit_repo(pool: asyncpg.Pool = Depends(get_pool)) -> AuditLogRepository:
+    return AuditLogRepository(pool)
+
+
 async def _require_policy_manage(current_user: CurrentUserDep) -> CurrentUser:
     """Enforce policy.manage permission and return the authenticated user."""
     if not has_permission(current_user.role, Permissions.POLICY_MANAGE):
@@ -84,6 +90,33 @@ async def _require_policy_manage(current_user: CurrentUserDep) -> CurrentUser:
 
 
 PolicyManageDep = Annotated[CurrentUser, Depends(_require_policy_manage)]
+
+
+async def _require_audit_trail_access(current_user: CurrentUserDep) -> CurrentUser:
+    """Enforce audit.view OR policy.manage permission for the audit trail endpoint.
+
+    Platform Admin and Engineering Manager can read the audit trail.
+    """
+    if has_permission(current_user.role, Permissions.AUDIT_VIEW) or has_permission(
+        current_user.role, Permissions.POLICY_MANAGE
+    ):
+        return current_user
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "error": {
+                "code": "forbidden",
+                "message": (
+                    "Audit trail access requires audit.view or policy.manage permission "
+                    "(Platform Admin or Engineering Manager role)."
+                ),
+                "details": None,
+            }
+        },
+    )
+
+
+AuditTrailDep = Annotated[CurrentUser, Depends(_require_audit_trail_access)]
 
 
 # ---------------------------------------------------------------------------
@@ -312,3 +345,43 @@ async def toggle_rule(
             detail={"error": {"code": "not_found", "message": f"Rule {rule_id} not found under policy {policy_id}", "details": None}},
         )
     return _rule_response(updated)
+
+
+@router.get(
+    "/{policy_id}/audit-trail",
+    response_model=AuditLogListResponse,
+    summary="Get paginated audit trail for a specific policy",
+)
+async def get_policy_audit_trail(
+    policy_id: uuid.UUID,
+    current_user: AuditTrailDep,
+    audit_repo: AuditLogRepository = Depends(get_audit_repo),
+    cursor: Optional[str] = Query(default=None, description="Pagination cursor (opaque base64 token)."),
+    limit: int = Query(default=50, ge=1, le=200, description="Maximum records per page."),
+) -> AuditLogListResponse:
+    """Return paginated audit history for a policy.
+
+    Returns all audit records where ``resource_type = 'policy'`` AND
+    ``resource_id = policy_id``, ordered newest-first.  Accessible by
+    Platform Admin (policy.manage) and Engineering Manager (audit.view).
+    """
+    rows = await audit_repo.list_by_resource(
+        "policy",
+        policy_id,
+        cursor=cursor,
+        limit=limit + 1,
+    )
+
+    has_more = len(rows) > limit
+    page = rows[:limit]
+
+    next_cursor: Optional[str] = None
+    if has_more and page:
+        import base64  # noqa: PLC0415
+        last = page[-1]
+        raw = f"{last['created_at'].isoformat()}|{last['id']}"
+        next_cursor = base64.b64encode(raw.encode()).decode()
+
+    entries = [AuditLogEntry(**r) for r in page]
+    total = await audit_repo.count_query(resource_type="policy", resource_id=policy_id)
+    return AuditLogListResponse(audit_logs=entries, next_cursor=next_cursor, total_count=total)

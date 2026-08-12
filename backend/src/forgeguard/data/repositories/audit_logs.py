@@ -79,6 +79,43 @@ class AuditLogRepository(BaseRepository):
         """Insert a new immutable audit log entry and return the stored record."""
         return await self.create(data)
 
+    async def list_by_resource(
+        self,
+        resource_type: str,
+        resource_id: str | uuid.UUID,
+        *,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return audit records for a specific resource, newest-first.
+
+        Wraps :meth:`query_with_filters` with both resource_type and resource_id
+        bound so callers get the full change history for a single entity.
+        """
+        return await self.query_with_filters(
+            resource_type=resource_type,
+            resource_id=resource_id,
+            cursor=cursor,
+            limit=limit,
+        )
+
+    async def list_by_actor(
+        self,
+        actor_id: str | uuid.UUID,
+        *,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return audit records authored by a specific actor, newest-first.
+
+        Wraps :meth:`query_with_filters` with actor_id bound.
+        """
+        return await self.query_with_filters(
+            actor_id=actor_id,
+            cursor=cursor,
+            limit=limit,
+        )
+
     async def count_query(
         self,
         *,
