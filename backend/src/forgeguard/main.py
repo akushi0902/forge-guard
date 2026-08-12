@@ -40,6 +40,7 @@ from forgeguard.api.routes.policies import router as policies_router
 from forgeguard.api.routes.releases import router as releases_router
 from forgeguard.api.routes.remediation import router as remediation_router
 from forgeguard.api.routes.agent import router as agent_router
+from forgeguard.api.routes.reports import router as reports_router
 from forgeguard.api.routes.services import router as services_router
 from forgeguard.api.routes.webhooks import router as webhooks_router
 from forgeguard.api.routes.system import router as system_router
@@ -253,6 +254,9 @@ def create_app() -> FastAPI:
 
     # Services catalog sync sub-resource (WO-089).
     app.include_router(services_router)
+
+    # Compliance report export (WO-093).
+    app.include_router(reports_router)
 
     # GitHub webhook receiver — HMAC-SHA256 authenticated, no JWT (WO-091).
     app.include_router(webhooks_router)
