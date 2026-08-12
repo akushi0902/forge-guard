@@ -215,6 +215,27 @@ async def get_assessment_score_repo(
     return AssessmentScoreRepository(pool)
 
 
+def get_forge_catalog_adapter():
+    """Return a :class:`~forgeguard.services.forge_catalog.ForgeCatalogHttpAdapter`.
+
+    Constructs a new adapter per request (stateless except for the shared
+    module-level TTL cache inside ForgeCatalogHttpClient).  The API key is
+    read from Settings and is NEVER logged or exposed in error responses.
+
+    Returns:
+        A fully configured :class:`~forgeguard.services.forge_catalog.ForgeCatalogHttpAdapter`.
+    """
+    from forgeguard.services.forge_catalog import ForgeCatalogHttpAdapter  # noqa: PLC0415
+    from forgeguard.services.forge_catalog_client import ForgeCatalogHttpClient  # noqa: PLC0415
+
+    settings = get_settings()
+    client = ForgeCatalogHttpClient(
+        base_url=settings.forge_catalog_url,
+        api_key=settings.forge_catalog_api_key,
+    )
+    return ForgeCatalogHttpAdapter(client=client)
+
+
 __all__ = [
     "SettingsDep",
     "get_settings",
@@ -233,4 +254,5 @@ __all__ = [
     "get_data_subject_service",
     "get_release_assessment_repo",
     "get_assessment_score_repo",
+    "get_forge_catalog_adapter",
 ]

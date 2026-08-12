@@ -202,6 +202,14 @@ class Settings(BaseSettings):
         default="https://forge.example.com/catalog",
         description="Base URL of the Forge Catalog API.",
     )
+    forge_catalog_api_key: str = Field(
+        default="",
+        description=(
+            "API key for the Forge Catalog API. "
+            "Injected via X-Forge-Api-Key header. "
+            "Must NEVER appear in logs or error responses."
+        ),
+    )
 
     # ------------------------------------------------------------------ #
     # CORS
