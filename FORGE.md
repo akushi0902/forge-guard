@@ -462,3 +462,10 @@
 - **Files:** 8 (+1215/-0)
 - **Duration:** 625ss
 - **Approach:** Implemented a strategy-pattern rule evaluation engine. EvaluationStatus (PASS/FAIL/INCONCLUSIVE/ERROR) and RuleEvaluationResult frozen dataclass live in services/domain/evaluation.py. Five concrete evaluators (ThresholdGte, ThresholdLte, ThresholdEq, RegexMatch, RegexNoMatch) inherit from RuleEvaluator ABC; all are async. RegexMatch/NoMatch use functools.lru_cache(maxsize=500) on compile_pattern(). RuleEvaluationEngine.evaluate_rules() iterates rules, dispatches via RULE_TYPE_REGISTRY dict, wraps each call in asyncio.wait_for(timeout=0.1). All numeric comparisons use Python Decimal. Missing data_key yields INCONCLUSIVE; malformed regex yields ERROR; unknown rule_type yields ERROR; timeout yields ERROR.
+
+## WO-055: User Story: WO-055 - Pre-Seed Policy Violations for Payment Service Demo
+- **Status:** completed
+- **Commit:** `0676fd3`
+- **Files:** 8 (+1430/-0)
+- **Duration:** 390ss
+- **Approach:** Designed 10 violation-focused policy rules across all 5 governance dimensions with fixed UUIDs (c0000000-... range) that don't conflict with existing seed fixtures. Rules are attached to the 5 existing dimension policies (e0000000-...). The threshold_config uses the data_key format compatible with the WO-038 RuleEvaluationEngine. The PAYMENT_SERVICE_COLLECTED_DATA dict in demo_collected_data.py provides flat key-value pairs deliberately calibrated to fail all 10 rules. An Alembic migration (revision e6f7a8b9c0d1) inserts the rules idempotently via ON CONFLICT DO NOTHING. The VIOLATIONS_CATALOG.md documents each scenario with dimension, severity, thresholds, simulated values, and a safety review section for the 2 security violations.
