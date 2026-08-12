@@ -511,3 +511,10 @@
 - **Files:** 12 (+1584/-1)
 - **Duration:** 567ss
 - **Approach:** Built the decision threshold engine bottom-up: (1) Alembic migration creating DECISION_THRESHOLDS with a partial unique index (WHERE is_active=true) enforcing single-active-config at the DB level; (2) DecisionThresholdRepository with an atomic activate() using a SERIALIZABLE transaction to atomically deactivate the old config and activate the new one; (3) DecisionThresholdService wrapping the repo with cross-field threshold validation (approve must be stricter than conditional) and a seed_defaults_if_absent() helper; (4) DecisionEngine.merge_scores() as a pure classmethod with no I/O — evaluates APPROVE first, then CONDITIONAL_APPROVE, then BLOCK to prevent ambiguity; (5) Admin API routes with threshold.manage RBAC enforcement and audit records on every mutation; (6) threshold.manage added to Permissions class and ALL_PERMISSIONS (Platform Admin already holds ALL_PERMISSIONS so no role matrix change needed); (7) lifespan in main.py seeds defaults on first startup.
+
+## WO-060: User Story: WO-060 - AI Response Caching with TTL and Invalidation
+- **Status:** completed
+- **Commit:** `a93d4da`
+- **Files:** 11 (+1146/-11)
+- **Duration:** 882ss
+- **Approach:** Implemented a DB-backed AI response cache distinct from the existing in-memory LRU cache in cache.py. The new DBResponseCache class in services/ai_engine/response_cache.py wraps a CacheRepository and computes deterministic SHA-256 keys from (dimension:severity:policy_rule_id:prompt_template_version). RecommendationService.get_or_generate() checks the DB cache before calling the LLM generator; on miss it generates, persists to rec_repo (unchanged), and stores in the DB cache. Policy rule modifications in the policies route trigger synchronous cache invalidation. The existing rec_repo fallback is preserved as backward-compat when no DB cache is injected. AI_CACHE_TTL_SECONDS was already configured in Settings.

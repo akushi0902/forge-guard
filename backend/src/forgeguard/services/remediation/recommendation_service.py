@@ -1,8 +1,12 @@
-"""RecommendationService: orchestrates finding lookup, generation, persistence, and audit (WO-058).
+"""RecommendationService: orchestrates finding lookup, generation, persistence, and audit (WO-058, WO-060).
 
 Idempotent by design: if a recommendation already exists for a finding and
 force_refresh is False, the cached recommendation is returned immediately without
 re-invoking the LLM.
+
+WO-060 adds a DB-backed ResponseCache layer checked before the LLM provider.
+Cache hits are keyed by (dimension, severity, policy_rule_id, template_version)
+so identical findings across services share one cached result.
 
 Raises:
     NotFoundError: Finding does not exist.
@@ -12,7 +16,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -23,6 +27,9 @@ from forgeguard.data.repositories.remediation_recommendation_repository import (
 )
 from forgeguard.services.ai_engine.recommendation_generator import RecommendationGenerator
 from forgeguard.services.audit import AuditService
+
+if TYPE_CHECKING:
+    from forgeguard.services.ai_engine.response_cache import DBResponseCache
 
 logger = structlog.get_logger(__name__)
 
@@ -38,6 +45,10 @@ class RecommendationService:
         rec_repo:       Repository for persisting RemediationRecommendation records.
         generator:      RecommendationGenerator that calls the LLM or falls back.
         audit_svc:      AuditService for immutable event logging.
+        response_cache: Optional DB-backed ResponseCache (WO-060). When provided,
+                        this is checked before the LLM and results are stored on
+                        every generation so subsequent identical requests are served
+                        from the cache without invoking the LLM provider.
     """
 
     def __init__(
@@ -46,11 +57,13 @@ class RecommendationService:
         rec_repo: RemediationRecommendationRepository,
         generator: RecommendationGenerator,
         audit_svc: AuditService,
+        response_cache: DBResponseCache | None = None,
     ) -> None:
         self._findings = finding_repo
         self._recs = rec_repo
         self._generator = generator
         self._audit = audit_svc
+        self._cache = response_cache
 
     async def get_or_generate(
         self,
@@ -61,6 +74,14 @@ class RecommendationService:
         correlation_id: str | None = None,
     ) -> dict[str, Any]:
         """Return an existing recommendation or generate a new one.
+
+        With DB cache wired (WO-060):
+            1. Check DB cache (keyed by content hash, TTL-aware) → return on hit.
+            2. On miss or force_refresh: generate, persist to rec_repo, store in cache.
+
+        Without DB cache (backward compat):
+            1. Check rec_repo for latest recommendation → return if found.
+            2. On miss or force_refresh: generate and persist.
 
         Args:
             finding_id:      UUID of the finding to generate guidance for.
@@ -79,15 +100,38 @@ class RecommendationService:
         if finding is None:
             raise NotFoundError(f"Finding {finding_id} not found")
 
-        if not force_refresh:
-            existing = await self._recs.get_latest_by_finding_id(finding_id)
-            if existing is not None:
-                logger.info(
-                    "recommendation_service.returning_cached",
-                    finding_id=str(finding_id),
-                    recommendation_id=str(existing["id"]),
-                )
-                return existing
+        if self._cache is not None:
+            cache_key, cached_entry = await self._cache.get(finding)
+            cache_hit = cached_entry is not None and not force_refresh
+            logger.info(
+                "recommendation_service.cache_lookup",
+                event="cache_lookup",
+                cache_hit=cache_hit,
+                cache_key=cache_key,
+                finding_id=str(finding_id),
+            )
+            if cache_hit:
+                return {
+                    "id": cached_entry["id"],
+                    "finding_id": finding_id,
+                    "recommendation_text": cached_entry["response_text"],
+                    "implementation_guide": cached_entry["implementation_guide"],
+                    "business_impact": None,
+                    "confidence_score": cached_entry["confidence_score"],
+                    "source": cached_entry["source"],
+                    "created_at": cached_entry["created_at"],
+                }
+        else:
+            # No DB cache — fall back to rec_repo (no TTL, original WO-058 behaviour).
+            if not force_refresh:
+                existing = await self._recs.get_latest_by_finding_id(finding_id)
+                if existing is not None:
+                    logger.info(
+                        "recommendation_service.returning_cached",
+                        finding_id=str(finding_id),
+                        recommendation_id=str(existing["id"]),
+                    )
+                    return existing
 
         result = await self._generator.generate(finding)
 
@@ -107,6 +151,15 @@ class RecommendationService:
             # ON CONFLICT upsert requires a unique constraint on finding_id.
             # If the table doesn't have one yet, fall back to plain create.
             persisted = await self._recs.create(rec_data)
+
+        if self._cache is not None:
+            await self._cache.store(
+                finding,
+                response_text=result.recommendation_text,
+                implementation_guide=result.implementation_guide,
+                confidence_score=result.confidence_score,
+                source=result.source,
+            )
 
         await self._audit_recommendation(
             persisted=persisted,

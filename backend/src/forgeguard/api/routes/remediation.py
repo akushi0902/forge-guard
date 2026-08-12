@@ -70,12 +70,15 @@ async def get_rec_repo(
 
 
 async def get_recommendation_service(
+    pool: asyncpg.Pool = Depends(get_pool),
     finding_repo: FindingRepository = Depends(get_finding_repo),
     rec_repo: RemediationRecommendationRepository = Depends(get_rec_repo),
     audit_svc: AuditService = Depends(get_audit_service),
 ) -> RecommendationService:
     from forgeguard.services.ai_engine.cache import ResponseCache
     from forgeguard.services.ai_engine.providers.openai_provider import OpenAIProvider
+    from forgeguard.services.ai_engine.response_cache import DBResponseCache
+    from forgeguard.data.repositories.cache_repository import CacheRepository
     from forgeguard.core.config import get_settings
 
     settings = get_settings()
@@ -84,11 +87,17 @@ async def get_recommendation_service(
     cache = ResponseCache()
     ai_engine = AIEngineService(provider=provider, circuit_breaker=cb, cache=cache)
     generator = RecommendationGenerator(ai_engine=ai_engine)
+    cache_repo = CacheRepository(pool)
+    response_cache = DBResponseCache(
+        cache_repo=cache_repo,
+        ttl_seconds=settings.ai_cache_ttl_seconds,
+    )
     return RecommendationService(
         finding_repo=finding_repo,
         rec_repo=rec_repo,
         generator=generator,
         audit_svc=audit_svc,
+        response_cache=response_cache,
     )
 
 

@@ -301,6 +301,7 @@ async def update_rule(
     body: PolicyRuleUpdate,
     request: Request,
     current_user: PolicyManageDep,
+    pool: asyncpg.Pool = Depends(get_pool),
     svc: PolicyGuardianService = Depends(get_policy_guardian_service),
 ) -> PolicyRuleResponse:
     data = body.model_dump(exclude_none=True)
@@ -319,6 +320,20 @@ async def update_rule(
             status_code=404,
             detail={"error": {"code": "not_found", "message": f"Rule {rule_id} not found under policy {policy_id}", "details": None}},
         )
+
+    # Invalidate cached AI recommendations referencing this rule (WO-060).
+    try:
+        from forgeguard.data.repositories.cache_repository import CacheRepository
+        from forgeguard.services.ai_engine.response_cache import DBResponseCache
+        response_cache = DBResponseCache(cache_repo=CacheRepository(pool))
+        await response_cache.invalidate_by_policy_rule_id(rule_id)
+    except Exception as exc:
+        logger.warning(
+            "update_rule.cache_invalidation_failed",
+            rule_id=str(rule_id),
+            error=str(exc),
+        )
+
     return _rule_response(updated)
 
 
@@ -331,6 +346,7 @@ async def toggle_rule(
     rule_id: uuid.UUID,
     request: Request,
     current_user: PolicyManageDep,
+    pool: asyncpg.Pool = Depends(get_pool),
     svc: PolicyGuardianService = Depends(get_policy_guardian_service),
 ) -> PolicyRuleResponse:
     updated = await svc.toggle_rule(
@@ -344,6 +360,20 @@ async def toggle_rule(
             status_code=404,
             detail={"error": {"code": "not_found", "message": f"Rule {rule_id} not found under policy {policy_id}", "details": None}},
         )
+
+    # Invalidate cached AI recommendations referencing this rule (WO-060).
+    try:
+        from forgeguard.data.repositories.cache_repository import CacheRepository
+        from forgeguard.services.ai_engine.response_cache import DBResponseCache
+        response_cache = DBResponseCache(cache_repo=CacheRepository(pool))
+        await response_cache.invalidate_by_policy_rule_id(rule_id)
+    except Exception as exc:
+        logger.warning(
+            "toggle_rule.cache_invalidation_failed",
+            rule_id=str(rule_id),
+            error=str(exc),
+        )
+
     return _rule_response(updated)
 
 
