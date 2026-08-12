@@ -3,6 +3,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 
 import { LoginPage } from '@/pages/LoginPage';
 import { PolicyConfiguration } from '@/pages/PolicyConfiguration';
+import { RBACManagement } from '@/pages/RBACManagement';
 
 // --------------------------------------------------------------------------
 // Placeholder page components
@@ -107,6 +108,10 @@ const routes: RouteObject[] = [
   {
     path: '/admin/policies',
     element: <PolicyConfiguration />,
+  },
+  {
+    path: '/admin/rbac',
+    element: <RBACManagement />,
   },
   {
     path: '/operations',
