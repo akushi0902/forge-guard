@@ -58,9 +58,10 @@ VALID_ASSESSMENT_STATUSES: tuple[str, ...] = (
 )
 VALID_FINDING_STATUSES: tuple[str, ...] = (
     "open",
-    "in_progress",
-    "resolved",
-    "suppressed",
+    "acknowledged",
+    "remediated",
+    "exception_granted",
+    "reopened",
 )
 VALID_SEVERITIES: tuple[str, ...] = ("critical", "high", "medium", "low")
 VALID_DIMENSIONS: tuple[str, ...] = (
@@ -82,7 +83,7 @@ _ASSESSMENT_STATUS_CHECK = (
     "status IN ('pending','in_progress','completed','failed')"
 )
 _FINDING_STATUS_CHECK = (
-    "status IN ('open','in_progress','resolved','suppressed')"
+    "status IN ('open','acknowledged','remediated','exception_granted','reopened')"
 )
 _SEVERITY_CHECK = (
     "severity IN ('critical','high','medium','low')"

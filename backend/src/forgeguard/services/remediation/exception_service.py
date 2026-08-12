@@ -28,7 +28,7 @@ _APPROVER_SECURITY = "security_reviewer"
 _APPROVER_DEFAULT = "platform_admin"
 
 # Finding statuses that do not allow exception requests.
-_TERMINAL_FINDING_STATUSES = {"resolved", "suppressed"}
+_TERMINAL_FINDING_STATUSES = {"remediated", "exception_granted"}
 
 
 def _route_approver(dimension: str) -> str:

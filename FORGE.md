@@ -476,3 +476,10 @@
 - **Files:** 6 (+742/-2)
 - **Duration:** 459ss
 - **Approach:** Added weight: Decimal field (default 1) to RuleEvaluationResult so the scorer has per-rule weights without requiring a separate lookup. Updated _make_result() in threshold.py to populate weight from rule.weight. Created PolicyDimension enum, ContributingFactor, and DimensionScore domain types in scoring.py. DimensionScoreCalculator.calculate_dimension_scores() groups results by dimension, applies weighted pass-rate (INCONCLUSIVE excluded from denominator, ERROR treated as failure), returns all 5 known dimensions always. Unknown dimensions are scored with a warning. All arithmetic uses Decimal with ROUND_HALF_UP and 2dp. Logic verified: all-pass=100, all-fail=0, mixed 4/5=80, all-inconclusive=None, error as fail=50, zero-weight=None.
+
+## WO-041: User Story: WO-041 - Finding Generation and Persistence from Rule Evaluations
+- **Status:** completed
+- **Commit:** `093ab26`
+- **Files:** 8 (+1060/-12)
+- **Duration:** 686ss
+- **Approach:** Created FindingStatus enum with VALID_TRANSITIONS state machine. Added Alembic migration to update the findings status CHECK constraint from old values (open/in_progress/resolved/suppressed) to new lifecycle values (open/acknowledged/remediated/exception_granted/reopened), plus unique partial index idx_findings_dedup for race-safe duplicate prevention. Extended FindingRepository with list_by_service (cursor pagination + severity/status filters), bulk_create_findings (batch INSERT with ON CONFLICT DO NOTHING), find_existing_open_finding (SELECT FOR UPDATE), and added transition validation to update_status. Created FindingGenerator service that filters FAIL/ERROR results, checks for duplicates via find_existing_open_finding, creates new findings with auto-generated title/description/evidence, and applies SeverityClassifier.is_escalation_required for critical+security escalation flagging. Updated exception_service.py terminal statuses to use new names. Added 40+ unit tests and fixture data across all severities and statuses.
