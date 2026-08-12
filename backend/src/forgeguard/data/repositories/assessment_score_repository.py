@@ -114,3 +114,26 @@ class AssessmentScoreRepository(ScoreRepository):
             The latest risk score row as a dict, or None if not found.
         """
         return await self.get_latest_score(service_id, "risk")
+
+    async def get_score_by_type(
+        self,
+        assessment_id: uuid.UUID,
+        score_type: str,
+    ) -> dict[str, Any] | None:
+        """Return the most recent score row for a given assessment and score type.
+
+        Args:
+            assessment_id: UUID of the assessment record.
+            score_type:    One of 'health' or 'risk'.
+
+        Returns:
+            The score row as a dict, or None if not found.
+        """
+        q = (
+            "SELECT * FROM assessment_scores "
+            "WHERE assessment_id = $1 AND score_type = $2 "
+            "ORDER BY created_at DESC LIMIT 1"
+        )
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(q, assessment_id, score_type)
+        return self._row(row)

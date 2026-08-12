@@ -6,6 +6,7 @@ import base64
 import re
 import uuid
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -84,15 +85,23 @@ class PaginatedAssessmentResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Release decision schemas (WO-050)
+# Release decision schemas (WO-050 / WO-051)
 # ---------------------------------------------------------------------------
 
 
-class ReleaseDecisionRequest(BaseModel):
-    """Request body for POST /api/v1/releases/{id}/decide."""
+class ReleaseDecisionCreate(str, Enum):
+    """Allowed decision values for POST /api/v1/releases/{id}/decide."""
 
-    health_score: float = Field(ge=0.0, le=100.0)
-    risk_score: float = Field(ge=0.0, le=100.0)
+    APPROVE = "APPROVE"
+    CONDITIONAL_APPROVE = "CONDITIONAL_APPROVE"
+    BLOCK = "BLOCK"
+
+
+class ReleaseDecisionRequest(BaseModel):
+    """Request body for POST /api/v1/releases/{id}/decide (WO-051)."""
+
+    decision: ReleaseDecisionCreate
+    rationale: str = Field(min_length=10, max_length=2000)
     comment: Optional[str] = Field(default=None, max_length=2000)
 
 
@@ -102,18 +111,20 @@ class EscalationReasonResponse(BaseModel):
 
 
 class ReleaseDecisionResponse(BaseModel):
-    """Response body for POST /api/v1/releases/{id}/decide."""
+    """Response body for POST /api/v1/releases/{id}/decide (WO-051)."""
 
     id: uuid.UUID
     release_assessment_id: uuid.UUID
+    health_score_at_decision: float
+    risk_score_at_decision: float
     decision: str
-    was_escalated: bool
-    escalation_reasons: list[EscalationReasonResponse]
-    original_recommendation: Optional[str] = None
-    health_score: float
-    risk_score: float
-    rationale: Optional[str] = None
     decided_by_role: Optional[str] = None
+    decided_by: Optional[uuid.UUID] = None
+    rationale: Optional[str] = None
+    comment: Optional[str] = None
+    was_escalated: bool
+    escalation_reasons: list[EscalationReasonResponse] = []
+    original_recommendation: Optional[str] = None
     created_at: datetime
 
 
