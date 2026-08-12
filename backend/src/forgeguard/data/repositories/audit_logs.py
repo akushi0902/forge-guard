@@ -79,6 +79,112 @@ class AuditLogRepository(BaseRepository):
         """Insert a new immutable audit log entry and return the stored record."""
         return await self.create(data)
 
+    async def count_query(
+        self,
+        *,
+        actor_id: str | uuid.UUID | None = None,
+        resource_type: str | None = None,
+        action: str | None = None,
+        after: datetime | None = None,
+        before: datetime | None = None,
+    ) -> int:
+        """Return the total number of audit records matching the given filters."""
+        params: list[Any] = []
+        idx = 1
+        q = "SELECT COUNT(*) FROM audit_logs WHERE TRUE"
+
+        if actor_id is not None:
+            q += f" AND actor_id = ${idx}"
+            params.append(uuid.UUID(str(actor_id)))
+            idx += 1
+        if resource_type is not None:
+            q += f" AND resource_type = ${idx}"
+            params.append(resource_type)
+            idx += 1
+        if action is not None:
+            q += f" AND action = ${idx}"
+            params.append(action)
+            idx += 1
+        if after is not None:
+            q += f" AND created_at >= ${idx}"
+            params.append(after)
+            idx += 1
+        if before is not None:
+            q += f" AND created_at < ${idx}"
+            params.append(before)
+            idx += 1
+
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(q, *params)
+        return int(row["count"]) if row else 0
+
+    async def query_page(
+        self,
+        *,
+        actor_id: str | uuid.UUID | None = None,
+        resource_type: str | None = None,
+        action: str | None = None,
+        after: datetime | None = None,
+        before: datetime | None = None,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Query audit logs with composite cursor-based pagination (created_at DESC, id DESC).
+
+        The cursor is a base64-encoded ``created_at.isoformat()|id`` composite key.
+        """
+        import base64  # noqa: PLC0415
+
+        params: list[Any] = []
+        idx = 1
+        q = "SELECT * FROM audit_logs WHERE TRUE"
+
+        if actor_id is not None:
+            q += f" AND actor_id = ${idx}"
+            params.append(uuid.UUID(str(actor_id)))
+            idx += 1
+        if resource_type is not None:
+            q += f" AND resource_type = ${idx}"
+            params.append(resource_type)
+            idx += 1
+        if action is not None:
+            q += f" AND action = ${idx}"
+            params.append(action)
+            idx += 1
+        if after is not None:
+            q += f" AND created_at >= ${idx}"
+            params.append(after)
+            idx += 1
+        if before is not None:
+            q += f" AND created_at < ${idx}"
+            params.append(before)
+            idx += 1
+
+        if cursor is not None:
+            try:
+                raw = base64.b64decode(cursor.encode()).decode()
+                ts_str, id_str = raw.rsplit("|", 1)
+                from datetime import timezone  # noqa: PLC0415
+                cursor_ts = datetime.fromisoformat(ts_str)
+                if cursor_ts.tzinfo is None:
+                    cursor_ts = cursor_ts.replace(tzinfo=timezone.utc)
+                cursor_id = uuid.UUID(id_str)
+                q += (
+                    f" AND (created_at < ${idx}"
+                    f" OR (created_at = ${idx} AND id < ${idx + 1}))"
+                )
+                params.extend([cursor_ts, cursor_ts, cursor_id])
+                idx += 2
+            except Exception:
+                logger.warning("audit_logs.query_page.invalid_cursor", cursor=cursor)
+
+        q += f" ORDER BY created_at DESC, id DESC LIMIT ${idx}"
+        params.append(limit)
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(q, *params)
+        return self._rows(rows)
+
     async def query(
         self,
         *,

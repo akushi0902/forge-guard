@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from forgeguard.api.routes.admin import router as admin_router
+from forgeguard.api.routes.admin_audit import router as admin_audit_router
 from forgeguard.api.routes.admin_rbac import router as admin_rbac_router
 from forgeguard.api.routes.auth import router as auth_router
 from forgeguard.api.routes.data_subject import router as data_subject_router
@@ -191,6 +192,9 @@ def create_app() -> FastAPI:
 
     # RBAC admin endpoints: user-role management (requires rbac.manage permission).
     app.include_router(admin_rbac_router)
+
+    # Audit log query endpoint (Platform Admin and Security Reviewer).
+    app.include_router(admin_audit_router)
 
     # Platform observability endpoints (Operator/Admin role required).
     app.include_router(platform_router)

@@ -154,6 +154,16 @@ ROUTE_PERMISSION_MAP: list[RoutePermission] = [
     RoutePermission("*", "/api/v1/admin/rbac/*",              [Permissions.RBAC_MANAGE]),
 
     # ------------------------------------------------------------------
+    # Admin — Audit logs (Platform Admin and Security Reviewer) (WO-029)
+    # ------------------------------------------------------------------
+    RoutePermission(
+        "GET",
+        "/api/v1/admin/audit-logs",
+        [Permissions.RBAC_MANAGE, Permissions.RELEASE_BLOCK],
+        match_mode="any",
+    ),
+
+    # ------------------------------------------------------------------
     # Admin — Policy / prompt template management
     # ------------------------------------------------------------------
     RoutePermission("*", "/api/v1/admin/policies",              [Permissions.POLICY_MANAGE]),

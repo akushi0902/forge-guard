@@ -27,6 +27,7 @@ from forgeguard.api.schemas.auth import (
     UserRegisterRequest,
     UserResponse,
 )
+from forgeguard.api.dependencies.audit import get_audit_service
 from forgeguard.core.config import get_settings
 from forgeguard.core.cookies import clear_auth_cookies, set_auth_cookies
 from forgeguard.core.dependencies import get_refresh_token_repository, get_user_repository
@@ -38,6 +39,7 @@ from forgeguard.core.security import (
 )
 from forgeguard.data.repositories.refresh_tokens import RefreshTokenRepository
 from forgeguard.data.repositories.users import UserRepository
+from forgeguard.services.audit import AuditService
 from forgeguard.services.auth import AuthService
 
 logger = structlog.get_logger(__name__)
@@ -69,6 +71,17 @@ async def require_platform_admin(request: Request) -> str:
 PlatformAdminDep = Annotated[str, Depends(require_platform_admin)]
 UserRepoDep = Annotated[UserRepository, Depends(get_user_repository)]
 RefreshTokenRepoDep = Annotated[RefreshTokenRepository, Depends(get_refresh_token_repository)]
+AuditServiceDep = Annotated[AuditService, Depends(get_audit_service)]
+
+
+def _extract_ip(request: Request) -> str | None:
+    """Extract client IP from X-Forwarded-For (leftmost) or ASGI scope."""
+    fwd = request.headers.get("X-Forwarded-For")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return None
 
 
 @router.post(
@@ -143,10 +156,12 @@ async def register_user(
     },
 )
 async def login(
+    request: Request,
     body: LoginRequest,
     response: Response,
     user_repo: UserRepoDep,
     rt_repo: RefreshTokenRepoDep,
+    audit_svc: AuditServiceDep,
 ) -> LoginResponse:
     """Authenticate a user and set httpOnly Secure JWT cookies.
 
@@ -155,9 +170,12 @@ async def login(
     - ``refresh_token`` cookie (7-day TTL, path=/api/v1/auth)
     """
     settings = get_settings()
-    service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key)
+    service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key, audit_service=audit_svc)
     login_resp, access_token, raw_refresh = await service.authenticate_user(
-        body.email, body.password
+        body.email,
+        body.password,
+        ip_address=_extract_ip(request),
+        correlation_id=getattr(request.state, "correlation_id", None),
     )
     set_auth_cookies(response, access_token=access_token, refresh_token=raw_refresh)
     payload = decode_access_token(access_token, settings.jwt_secret_key)
@@ -175,9 +193,11 @@ async def login(
     },
 )
 async def refresh(
+    request: Request,
     response: Response,
     user_repo: UserRepoDep,
     rt_repo: RefreshTokenRepoDep,
+    audit_svc: AuditServiceDep,
     refresh_token: str | None = Cookie(default=None),
 ) -> dict:
     """Rotate the refresh token cookie and issue a new access token.
@@ -188,8 +208,12 @@ async def refresh(
     if not refresh_token:
         raise UnauthorizedError("Invalid or expired refresh token.")
     settings = get_settings()
-    service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key)
-    new_access, new_refresh = await service.refresh_tokens(refresh_token)
+    service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key, audit_service=audit_svc)
+    new_access, new_refresh = await service.refresh_tokens(
+        refresh_token,
+        ip_address=_extract_ip(request),
+        correlation_id=getattr(request.state, "correlation_id", None),
+    )
     set_auth_cookies(response, access_token=new_access, refresh_token=new_refresh)
     payload = decode_access_token(new_access, settings.jwt_secret_key)
     response.headers["X-CSRF-Token"] = generate_csrf_token(payload["jti"], settings.csrf_secret_key)
@@ -205,16 +229,22 @@ async def refresh(
     },
 )
 async def logout(
+    request: Request,
     response: Response,
     user_repo: UserRepoDep,
     rt_repo: RefreshTokenRepoDep,
+    audit_svc: AuditServiceDep,
     refresh_token: str | None = Cookie(default=None),
 ) -> dict:
     """Revoke the current refresh token and clear both auth cookies."""
     if refresh_token:
         settings = get_settings()
-        service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key)
-        await service.logout(refresh_token)
+        service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key, audit_service=audit_svc)
+        await service.logout(
+            refresh_token,
+            ip_address=_extract_ip(request),
+            correlation_id=getattr(request.state, "correlation_id", None),
+        )
     clear_auth_cookies(response)
     return {"message": "Logged out"}
 
@@ -230,10 +260,12 @@ async def logout(
     },
 )
 async def change_password(
+    request: Request,
     body: ChangePasswordRequest,
     current_user: CurrentUserDep,
     user_repo: UserRepoDep,
     rt_repo: RefreshTokenRepoDep,
+    audit_svc: AuditServiceDep,
 ) -> dict:
     """Change the authenticated user's password and revoke all refresh tokens.
 
@@ -242,10 +274,12 @@ async def change_password(
     for the user so that existing sessions cannot be silently renewed.
     """
     settings = get_settings()
-    service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key)
+    service = AuthService(user_repo, rt_repo, jwt_secret=settings.jwt_secret_key, audit_service=audit_svc)
     await service.change_password(
         user_id=current_user.user_id,
         current_password=body.current_password,
         new_password=body.new_password,
+        ip_address=_extract_ip(request),
+        correlation_id=getattr(request.state, "correlation_id", None),
     )
     return {"message": "Password changed successfully. All sessions have been invalidated."}

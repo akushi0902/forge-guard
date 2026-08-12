@@ -23,6 +23,7 @@ from forgeguard.data.repositories.users import UserRepository
 
 if TYPE_CHECKING:
     from forgeguard.data.repositories.refresh_tokens import RefreshTokenRepository
+    from forgeguard.services.audit import AuditService
 
 logger = structlog.get_logger(__name__)
 
@@ -72,10 +73,25 @@ class AuthService:
         user_repo: UserRepository,
         refresh_token_repo: Optional["RefreshTokenRepository"] = None,
         jwt_secret: str = "",
+        audit_service: Optional["AuditService"] = None,
     ) -> None:
         self._repo = user_repo
         self._rt_repo = refresh_token_repo
         self._jwt_secret = jwt_secret
+        self._audit = audit_service
+
+    async def _audit_log(self, **kwargs: Any) -> None:
+        """Write an audit record; swallows errors so auth ops are never blocked."""
+        if self._audit is None:
+            return
+        try:
+            await self._audit.log_event(**kwargs)
+        except Exception as exc:
+            logger.error(
+                "auth.audit.write_failed",
+                error=str(exc),
+                action=kwargs.get("action"),
+            )
 
     async def register_user(self, request: UserRegisterRequest) -> UserResponse:
         """Create a new user account.
@@ -146,7 +162,11 @@ class AuthService:
     # ------------------------------------------------------------------
 
     async def authenticate_user(
-        self, email: str, password: str
+        self,
+        email: str,
+        password: str,
+        ip_address: Optional[str] = None,
+        correlation_id: Optional[str] = None,
     ) -> tuple[LoginResponse, str, str]:
         """Validate credentials and issue an access + refresh token pair.
 
@@ -181,6 +201,16 @@ class AuthService:
                         email_masked=_mask_email(email),
                         user_id=str(user["id"]),
                     )
+                    await self._audit_log(
+                        actor_id=user["id"],
+                        actor_role=user.get("role", ""),
+                        action="auth.login_failed",
+                        resource_type="users",
+                        resource_id=user["id"],
+                        after_state={"reason": "account_locked"},
+                        ip_address=ip_address,
+                        correlation_id=correlation_id,
+                    )
                     raise UnauthorizedError(_LOCKED_MSG)
 
         if not user or not is_valid:
@@ -206,11 +236,41 @@ class AuthService:
                         lockout_seconds=int(duration.total_seconds()),
                         attempt_count=new_count,
                     )
+                    await self._audit_log(
+                        actor_id=user["id"],
+                        actor_role=user.get("role", ""),
+                        action="auth.account_locked",
+                        resource_type="users",
+                        resource_id=user["id"],
+                        after_state={"lockout_count": lockout_count, "duration_seconds": int(duration.total_seconds())},
+                        ip_address=ip_address,
+                        correlation_id=correlation_id,
+                    )
+                await self._audit_log(
+                    actor_id=user["id"],
+                    actor_role=user.get("role", ""),
+                    action="auth.login_failed",
+                    resource_type="users",
+                    resource_id=user["id"],
+                    after_state={"reason": "invalid_credentials", "attempt_count": new_count},
+                    ip_address=ip_address,
+                    correlation_id=correlation_id,
+                )
             else:
                 logger.warning(
                     "auth.login.failed",
                     reason="invalid_credentials",
                     email_domain=email.split("@")[-1] if "@" in email else "unknown",
+                )
+                await self._audit_log(
+                    actor_id=None,
+                    actor_role="",
+                    action="auth.login_failed",
+                    resource_type="users",
+                    resource_id=None,
+                    after_state={"reason": "unknown_email"},
+                    ip_address=ip_address,
+                    correlation_id=correlation_id,
                 )
             raise UnauthorizedError(_INVALID_CREDENTIALS_MSG)
 
@@ -244,6 +304,16 @@ class AuthService:
             role=user["role"],
         )
 
+        await self._audit_log(
+            actor_id=user["id"],
+            actor_role=user["role"],
+            action="auth.login",
+            resource_type="users",
+            resource_id=user["id"],
+            ip_address=ip_address,
+            correlation_id=correlation_id,
+        )
+
         return (
             LoginResponse(
                 id=user["id"],
@@ -262,7 +332,10 @@ class AuthService:
     # ------------------------------------------------------------------
 
     async def refresh_tokens(
-        self, raw_refresh_token: str
+        self,
+        raw_refresh_token: str,
+        ip_address: Optional[str] = None,
+        correlation_id: Optional[str] = None,
     ) -> tuple[str, str]:
         """Rotate a refresh token and issue a new access + refresh pair.
 
@@ -337,13 +410,29 @@ class AuthService:
         )
 
         logger.info("auth.refresh.success", user_id=str(user_id))
+
+        await self._audit_log(
+            actor_id=user_id,
+            actor_role=user["role"],
+            action="auth.token_refresh",
+            resource_type="users",
+            resource_id=user_id,
+            ip_address=ip_address,
+            correlation_id=correlation_id,
+        )
+
         return new_access, new_raw_refresh
 
     # ------------------------------------------------------------------
     # Logout
     # ------------------------------------------------------------------
 
-    async def logout(self, raw_refresh_token: str) -> None:
+    async def logout(
+        self,
+        raw_refresh_token: str,
+        ip_address: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+    ) -> None:
         """Revoke the current refresh token on logout.
 
         If the token is not found (already cleared or expired), this is a
@@ -356,6 +445,15 @@ class AuthService:
         if existing is not None and existing.get("revoked_at") is None:
             await self._rt_repo.revoke(uuid.UUID(str(existing["id"])))
             logger.info("auth.logout.success", user_id=str(existing["user_id"]))
+            await self._audit_log(
+                actor_id=existing["user_id"],
+                actor_role="",
+                action="auth.logout",
+                resource_type="users",
+                resource_id=existing["user_id"],
+                ip_address=ip_address,
+                correlation_id=correlation_id,
+            )
 
     # ------------------------------------------------------------------
     # Password change
@@ -366,6 +464,8 @@ class AuthService:
         user_id: uuid.UUID,
         current_password: str,
         new_password: str,
+        ip_address: Optional[str] = None,
+        correlation_id: Optional[str] = None,
     ) -> None:
         """Change a user's password and revoke all refresh tokens.
 
@@ -407,6 +507,16 @@ class AuthService:
             await self._rt_repo.revoke_all_for_user(user_id)
 
         logger.info("auth.change_password.success", user_id=str(user_id))
+
+        await self._audit_log(
+            actor_id=user_id,
+            actor_role=user.get("role", ""),
+            action="auth.password_changed",
+            resource_type="users",
+            resource_id=user_id,
+            ip_address=ip_address,
+            correlation_id=correlation_id,
+        )
 
     # ------------------------------------------------------------------
     # Private helpers
