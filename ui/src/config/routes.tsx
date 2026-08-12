@@ -179,6 +179,7 @@ const PoliciesPage    = lazy(() => import('@/pages/PoliciesPage').then((m) => ({
 const RbacPage        = lazy(() => import('@/pages/RbacPage').then((m) => ({ default: m.RbacPage })));
 const UsersPage       = lazy(() => import('@/pages/UsersPage').then((m) => ({ default: m.UsersPage })));
 const IntegrationsPage = lazy(() => import('@/pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })));
+const ReleaseAssessmentRequestPage = lazy(() => import('@/pages/ReleaseAssessmentRequestPage').then((m) => ({ default: m.ReleaseAssessmentRequestPage })));
 
 // ---------------------------------------------------------------------------
 // Guarded route helper
@@ -236,6 +237,10 @@ export const router = createBrowserRouter([
           {
             path: 'releases',
             element: guarded('assessment:read', <ReleasesPage />),
+          },
+          {
+            path: 'releases/new',
+            element: guarded('assessment:write', <ReleaseAssessmentRequestPage />),
           },
           {
             path: 'findings',

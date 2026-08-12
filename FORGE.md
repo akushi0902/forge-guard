@@ -385,3 +385,10 @@
 - **Files:** 11 (+1518/-6)
 - **Duration:** 615ss
 - **Approach:** Built exception request API bottom-up: Alembic migration adds approver_role column and extends status CHECK on existing exceptions table, ExceptionRepository extends BaseRepository with duplicate-check queries, ExceptionService implements routing logic (_route_approver: security→security_reviewer, others→platform_admin) plus validation guards for terminal finding status and duplicate pending/active exceptions, Pydantic schemas enforce justification≥20chars and expires_at strictly-future≤90-days, FastAPI router registers POST /api/v1/findings/{id}/exceptions (201) and GET /api/v1/exceptions/{id} (200) using ExceptionRequestDep pattern matching existing codebase style, main.py wires in remediation_router, route_permissions.py gets the new POST route entry.
+
+## WO-074: User Story: WO-074 - Build Release Assessment Request Form with Validation
+- **Status:** completed
+- **Commit:** `f0e8681`
+- **Files:** 9 (+829/-3)
+- **Duration:** 1248ss
+- **Approach:** Built three components: AssessmentRequestForm (Mantine useForm with service selector + 40-hex-char SHA validation), AssessmentProgress (TanStack Query polling via refetchInterval callback, elapsed time counter, timeout warning at 300s, fatal error after 3 consecutive failures tracked via error object reference changes), and ReleaseAssessmentRequestPage (form/progress state machine with URL param persistence). Added /releases/new route guarded by assessment:write permission, extended useRelease with UseReleaseOptions, and added PENDING_RELEASE_FIXTURE to MSW handlers.

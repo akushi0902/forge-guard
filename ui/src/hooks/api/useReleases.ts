@@ -8,11 +8,16 @@ export const releaseKeys = {
   detail: (id: string) => ['releases', id] as const,
 };
 
-export function useRelease(id: string) {
+export interface UseReleaseOptions {
+  refetchInterval?: number | false | ((query: any) => number | false | undefined);
+}
+
+export function useRelease(id: string, options?: UseReleaseOptions) {
   return useQuery({
     queryKey: releaseKeys.detail(id),
     queryFn: () => apiClient<ReleaseAssessment>(`/api/v1/releases/${id}`),
     enabled: Boolean(id),
+    ...(options ?? {}),
   });
 }
 
