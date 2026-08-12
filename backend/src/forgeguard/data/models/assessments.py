@@ -223,12 +223,15 @@ class AssessmentScore(Base):
         nullable=False,
     )
     score_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    overall_score: Mapped[Decimal] = mapped_column(
-        Numeric(5, 2), nullable=False
+    overall_score: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(5, 2), nullable=True
     )
     dimension_scores: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     contributing_factors: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSONB, nullable=True
+    )
+    weights_used: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default="'{}'"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

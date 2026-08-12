@@ -483,3 +483,10 @@
 - **Files:** 8 (+1060/-12)
 - **Duration:** 686ss
 - **Approach:** Created FindingStatus enum with VALID_TRANSITIONS state machine. Added Alembic migration to update the findings status CHECK constraint from old values (open/in_progress/resolved/suppressed) to new lifecycle values (open/acknowledged/remediated/exception_granted/reopened), plus unique partial index idx_findings_dedup for race-safe duplicate prevention. Extended FindingRepository with list_by_service (cursor pagination + severity/status filters), bulk_create_findings (batch INSERT with ON CONFLICT DO NOTHING), find_existing_open_finding (SELECT FOR UPDATE), and added transition validation to update_status. Created FindingGenerator service that filters FAIL/ERROR results, checks for duplicates via find_existing_open_finding, creates new findings with auto-generated title/description/evidence, and applies SeverityClassifier.is_escalation_required for critical+security escalation flagging. Updated exception_service.py terminal statuses to use new names. Added 40+ unit tests and fixture data across all severities and statuses.
+
+## WO-040: User Story: WO-040 - Health Score Aggregation with Configurable Dimension Weights
+- **Status:** completed
+- **Commit:** `5039a1b`
+- **Files:** 7 (+828/-4)
+- **Duration:** 479ss
+- **Approach:** Added HealthScoreResult frozen dataclass to scoring.py. Created HealthScoreAggregator with DEFAULT_WEIGHTS (20% each for 5 dimensions) and proportional weight redistribution for null dimensions: active dimension effective weight = original_w[d] / sum(original_w for active dims) * 100; overall_score = sum(score[d] * original_w[d]) / total_active_weight. Returns None when all dimensions lack data. Created Alembic migration to add weights_used JSONB column and make overall_score nullable. Extended ScoreRepository with save_health_score (serialises HealthScoreResult), get_latest_health_score, and cursor-paginated list_scores_by_service. All arithmetic uses Decimal with ROUND_HALF_UP to 2dp. Verified: VARIED=(50+60+70+80+90)/5=70.00, SINGLE_DIM=72.50 with 100% effective weight, TWO_MISSING=(60+90+75)/3=75.00.
