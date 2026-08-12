@@ -40,6 +40,7 @@ class Permissions:
     HEALTH_MONITOR = "health.monitor"
     TRENDS_VIEW = "trends.view"
     AUDIT_VIEW = "audit.view"
+    THRESHOLD_MANAGE = "threshold.manage"
 
 
 #: Frozenset of every defined permission slug, used by Platform Admin sentinel.
@@ -55,6 +56,7 @@ ALL_PERMISSIONS: frozenset[str] = frozenset({
     Permissions.HEALTH_MONITOR,
     Permissions.TRENDS_VIEW,
     Permissions.AUDIT_VIEW,
+    Permissions.THRESHOLD_MANAGE,
 })
 
 

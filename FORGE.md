@@ -504,3 +504,10 @@
 - **Files:** 11 (+1911/-0)
 - **Duration:** 728ss
 - **Approach:** Implemented the full health assessment pipeline as an orchestration service injected into four new API endpoints. The AssessmentOrchestrator wires together existing services (RuleEvaluationEngine, DimensionScoreCalculator, HealthScoreAggregator, FindingGenerator, ScoreRepository) via constructor injection. A SimpleNamespace adapter bridges raw DB rule dicts to the attribute-access interface expected by the evaluation engine, with the policy dimension projected via a JOIN in PolicyRepository.list_active_rules(). The assessments table from WO-009 is reused; no new migration was needed. MockDataCollector provides deterministic Payment Service demo data for the MVP. All four endpoints enforce RBAC (assessment.request / service.view) and return structured 404/409/500 error bodies.
+
+## WO-049: User Story: WO-049 - Configurable Decision Threshold Engine with Score Merging
+- **Status:** completed
+- **Commit:** `f15686c`
+- **Files:** 12 (+1584/-1)
+- **Duration:** 567ss
+- **Approach:** Built the decision threshold engine bottom-up: (1) Alembic migration creating DECISION_THRESHOLDS with a partial unique index (WHERE is_active=true) enforcing single-active-config at the DB level; (2) DecisionThresholdRepository with an atomic activate() using a SERIALIZABLE transaction to atomically deactivate the old config and activate the new one; (3) DecisionThresholdService wrapping the repo with cross-field threshold validation (approve must be stricter than conditional) and a seed_defaults_if_absent() helper; (4) DecisionEngine.merge_scores() as a pure classmethod with no I/O — evaluates APPROVE first, then CONDITIONAL_APPROVE, then BLOCK to prevent ambiguity; (5) Admin API routes with threshold.manage RBAC enforcement and audit records on every mutation; (6) threshold.manage added to Permissions class and ALL_PERMISSIONS (Platform Admin already holds ALL_PERMISSIONS so no role matrix change needed); (7) lifespan in main.py seeds defaults on first startup.

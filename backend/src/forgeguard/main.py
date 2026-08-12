@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from forgeguard.api.routes.admin import router as admin_router
+from forgeguard.api.routes.admin_thresholds import router as admin_thresholds_router
 from forgeguard.api.routes.health import router as health_router
 from forgeguard.api.routes.admin_audit import router as admin_audit_router
 from forgeguard.api.routes.admin_expiry import router as admin_expiry_router
@@ -60,11 +61,24 @@ logger = structlog.get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage asyncpg connection pool and retention scheduler lifecycle."""
-    from forgeguard.data.database import close_pool, init_pool  # noqa: PLC0415
+    from forgeguard.data.database import close_pool, get_pool, init_pool  # noqa: PLC0415
     from forgeguard.services.scheduler import SchedulerService  # noqa: PLC0415
 
     settings = get_settings()
     await init_pool()
+
+    # Seed default decision thresholds if none are active.
+    try:
+        from forgeguard.data.repositories.decision_threshold_repository import DecisionThresholdRepository  # noqa: PLC0415
+        from forgeguard.services.decision_engine.threshold_service import DecisionThresholdService  # noqa: PLC0415
+
+        pool = await get_pool()
+        threshold_svc = DecisionThresholdService(DecisionThresholdRepository(pool))
+        seeded = await threshold_svc.seed_defaults_if_absent()
+        if seeded:
+            logger.info("lifespan.decision_thresholds.seeded")
+    except Exception:
+        logger.warning("lifespan.decision_thresholds.seed_failed")
 
     scheduler: SchedulerService | None = None
     if settings.scheduler_enabled:
@@ -228,6 +242,9 @@ def create_app() -> FastAPI:
 
     # Health assessment pipeline endpoints (WO-042).
     app.include_router(health_router)
+
+    # Decision threshold admin endpoints (WO-049).
+    app.include_router(admin_thresholds_router)
 
     # GitHub webhook receiver — HMAC-SHA256 authenticated, no JWT (WO-091).
     app.include_router(webhooks_router)
