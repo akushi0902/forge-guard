@@ -455,3 +455,10 @@
 - **Files:** 16 (+1257/-0)
 - **Duration:** 401ss
 - **Approach:** Built the RBAC Management page as a two-tab Mantine Tabs interface guarded by RoleGuard(rbac.manage). Users tab: UsersPanel with client-side text search (name/email), UsersTable showing PII-masked emails (maskEmail: first char + *** + @domain), role Select dropdowns that open a ConfirmRoleChangeModal before committing, and self-change prevention (disabled Tooltip-wrapped Select for the current user's row). ConfirmRoleChangeModal shows before/after role badges, handles API 400 inline (last-admin guard), and uses loading state during mutation. Roles & Permissions tab: RolePermissionMatrix — a read-only Mantine Table with 10 permission rows × 6 role columns driven by the ROLE_PERMISSION_MATRIX constant matching the backend RBAC spec. useUsers() queries GET /api/v1/admin/roles; useUpdateUserRole() calls PUT /api/v1/admin/users/{id}/role and invalidates the user list cache on success. MSW handlers simulate full CRUD including 400 last-admin rejection. 11-user fixture covers all six roles.
+
+## WO-038: User Story: WO-038 - Policy Rule Evaluation Engine with Threshold Logic
+- **Status:** completed
+- **Commit:** `c7e4a63`
+- **Files:** 8 (+1215/-0)
+- **Duration:** 625ss
+- **Approach:** Implemented a strategy-pattern rule evaluation engine. EvaluationStatus (PASS/FAIL/INCONCLUSIVE/ERROR) and RuleEvaluationResult frozen dataclass live in services/domain/evaluation.py. Five concrete evaluators (ThresholdGte, ThresholdLte, ThresholdEq, RegexMatch, RegexNoMatch) inherit from RuleEvaluator ABC; all are async. RegexMatch/NoMatch use functools.lru_cache(maxsize=500) on compile_pattern(). RuleEvaluationEngine.evaluate_rules() iterates rules, dispatches via RULE_TYPE_REGISTRY dict, wraps each call in asyncio.wait_for(timeout=0.1). All numeric comparisons use Python Decimal. Missing data_key yields INCONCLUSIVE; malformed regex yields ERROR; unknown rule_type yields ERROR; timeout yields ERROR.
