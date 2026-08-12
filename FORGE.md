@@ -497,3 +497,10 @@
 - **Files:** 9 (+1136/-10)
 - **Duration:** 611ss
 - **Approach:** Implemented the AI Remediation Recommendation Generator as a three-layer pipeline: (1) RecommendationGenerator builds an LLM prompt from finding context, calls AIEngineService (circuit-breaker + cache), parses the structured ## section response, and falls back to TemplateEngine/generic template on any failure — always returning a RecommendationResult without propagating errors. (2) RecommendationService.get_or_generate() provides idempotent access — returns cached recommendation if one exists and force_refresh=False, otherwise generates, persists via upsert() (with create() fallback), and emits a best-effort audit event. (3) GET /api/v1/findings/{finding_id}/remediation wires the service into the router with force_refresh query param and 404 handling for missing findings. Source values match the existing DB CHECK constraint: 'ai_generated' and 'template_fallback'.
+
+## WO-042: User Story: WO-042 - Health Assessment API Endpoint and Orchestration Pipeline
+- **Status:** completed
+- **Commit:** `ad03e46`
+- **Files:** 11 (+1911/-0)
+- **Duration:** 728ss
+- **Approach:** Implemented the full health assessment pipeline as an orchestration service injected into four new API endpoints. The AssessmentOrchestrator wires together existing services (RuleEvaluationEngine, DimensionScoreCalculator, HealthScoreAggregator, FindingGenerator, ScoreRepository) via constructor injection. A SimpleNamespace adapter bridges raw DB rule dicts to the attribute-access interface expected by the evaluation engine, with the policy dimension projected via a JOIN in PolicyRepository.list_active_rules(). The assessments table from WO-009 is reused; no new migration was needed. MockDataCollector provides deterministic Payment Service demo data for the MVP. All four endpoints enforce RBAC (assessment.request / service.view) and return structured 404/409/500 error bodies.

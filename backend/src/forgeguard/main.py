@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from forgeguard.api.routes.admin import router as admin_router
+from forgeguard.api.routes.health import router as health_router
 from forgeguard.api.routes.admin_audit import router as admin_audit_router
 from forgeguard.api.routes.admin_expiry import router as admin_expiry_router
 from forgeguard.api.routes.admin_rbac import router as admin_rbac_router
@@ -224,6 +225,9 @@ def create_app() -> FastAPI:
 
     # Remediation lifecycle endpoints (WO-062).
     app.include_router(remediation_router)
+
+    # Health assessment pipeline endpoints (WO-042).
+    app.include_router(health_router)
 
     # GitHub webhook receiver — HMAC-SHA256 authenticated, no JWT (WO-091).
     app.include_router(webhooks_router)

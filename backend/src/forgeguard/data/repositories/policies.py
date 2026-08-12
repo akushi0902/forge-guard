@@ -169,6 +169,46 @@ class PolicyRepository(BaseRepository):
             row = await conn.fetchrow(q)
         return row[0] if row else 0
 
+    async def list_active_rules(
+        self, service_id: uuid.UUID | None = None
+    ) -> list[dict[str, Any]]:
+        """Return all active policy rules for service_id (or globally active rules).
+
+        Includes rules from global policies (policy.service_id IS NULL) and
+        service-specific policies scoped to service_id.  Rules from policies
+        deleted or inactive are excluded.
+
+        Args:
+            service_id: When provided, includes service-specific policies for this
+                service in addition to global policies.  When None, returns only
+                globally active rules.
+
+        Returns:
+            List of rule dicts with policy dimension attached as ``dimension`` key.
+        """
+        if service_id is not None:
+            q = (
+                "SELECT r.*, p.dimension AS dimension FROM policy_rules r "
+                "JOIN policies p ON r.policy_id = p.id "
+                "WHERE r.is_active = TRUE AND p.is_active = TRUE "
+                "AND p.deleted_at IS NULL "
+                "AND (p.service_id IS NULL OR p.service_id = $1) "
+                "ORDER BY r.id"
+            )
+            async with self._pool.acquire() as conn:
+                rows = await conn.fetch(q, uuid.UUID(str(service_id)))
+        else:
+            q = (
+                "SELECT r.*, p.dimension AS dimension FROM policy_rules r "
+                "JOIN policies p ON r.policy_id = p.id "
+                "WHERE r.is_active = TRUE AND p.is_active = TRUE "
+                "AND p.deleted_at IS NULL AND p.service_id IS NULL "
+                "ORDER BY r.id"
+            )
+            async with self._pool.acquire() as conn:
+                rows = await conn.fetch(q)
+        return self._rows(rows)
+
     # ------------------------------------------------------------------
     # Policy rule methods
     # ------------------------------------------------------------------
