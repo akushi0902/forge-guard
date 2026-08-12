@@ -134,12 +134,14 @@ ROUTE_PERMISSION_MAP: list[RoutePermission] = [
     RoutePermission("POST", "/api/v1/releases/*/block",      [Permissions.RELEASE_BLOCK]),
 
     # ------------------------------------------------------------------
-    # Exception requests and approvals
+    # Exception requests and approvals (WO-062)
+    # POST /findings/{id}/exceptions must appear before broader wildcard.
     # ------------------------------------------------------------------
-    RoutePermission("GET",  "/api/v1/exceptions",          [Permissions.SERVICE_VIEW]),
-    RoutePermission("GET",  "/api/v1/exceptions/*",        [Permissions.SERVICE_VIEW]),
-    RoutePermission("POST", "/api/v1/exceptions",          [Permissions.EXCEPTION_REQUEST]),
-    RoutePermission("POST", "/api/v1/exceptions/*/approve", [Permissions.EXCEPTION_APPROVE]),
+    RoutePermission("POST", "/api/v1/findings/*/exceptions", [Permissions.EXCEPTION_REQUEST]),
+    RoutePermission("GET",  "/api/v1/exceptions",            [Permissions.SERVICE_VIEW]),
+    RoutePermission("GET",  "/api/v1/exceptions/*",          [Permissions.SERVICE_VIEW]),
+    RoutePermission("POST", "/api/v1/exceptions",            [Permissions.EXCEPTION_REQUEST]),
+    RoutePermission("POST", "/api/v1/exceptions/*/approve",  [Permissions.EXCEPTION_APPROVE]),
 
     # ------------------------------------------------------------------
     # Admin — RBAC management (WO-027 + WO-028)

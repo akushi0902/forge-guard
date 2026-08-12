@@ -35,6 +35,7 @@ from forgeguard.api.routes.demo import router as demo_router
 from forgeguard.api.routes.platform import router as platform_router
 from forgeguard.api.routes.policies import router as policies_router
 from forgeguard.api.routes.releases import router as releases_router
+from forgeguard.api.routes.remediation import router as remediation_router
 from forgeguard.api.routes.system import router as system_router
 from forgeguard.core.config import Settings, get_settings
 from forgeguard.core.error_handlers import register_error_handlers
@@ -215,6 +216,9 @@ def create_app() -> FastAPI:
 
     # Policy Guardian CRUD endpoints (WO-035).
     app.include_router(policies_router)
+
+    # Remediation lifecycle endpoints (WO-062).
+    app.include_router(remediation_router)
 
     # Root stub retained for backward compatibility.
     @app.get("/", tags=["system"], summary="Root liveness probe")
