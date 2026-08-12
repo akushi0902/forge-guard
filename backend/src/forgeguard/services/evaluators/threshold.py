@@ -29,6 +29,11 @@ def _make_result(
     expected: Any,
     evidence: dict[str, Any],
 ) -> RuleEvaluationResult:
+    from decimal import Decimal as _Dec  # noqa: PLC0415
+    try:
+        weight = _Dec(str(rule.weight)) if rule.weight is not None else _Dec("1")
+    except Exception:
+        weight = _Dec("1")
     return RuleEvaluationResult(
         rule_id=rule.id,
         rule_name=rule.name,
@@ -39,6 +44,7 @@ def _make_result(
         expected_value=expected,
         evidence=evidence,
         evaluated_at=datetime.now(tz=timezone.utc),
+        weight=weight,
     )
 
 

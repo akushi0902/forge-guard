@@ -469,3 +469,10 @@
 - **Files:** 8 (+1430/-0)
 - **Duration:** 390ss
 - **Approach:** Designed 10 violation-focused policy rules across all 5 governance dimensions with fixed UUIDs (c0000000-... range) that don't conflict with existing seed fixtures. Rules are attached to the 5 existing dimension policies (e0000000-...). The threshold_config uses the data_key format compatible with the WO-038 RuleEvaluationEngine. The PAYMENT_SERVICE_COLLECTED_DATA dict in demo_collected_data.py provides flat key-value pairs deliberately calibrated to fail all 10 rules. An Alembic migration (revision e6f7a8b9c0d1) inserts the rules idempotently via ON CONFLICT DO NOTHING. The VIOLATIONS_CATALOG.md documents each scenario with dimension, severity, thresholds, simulated values, and a safety review section for the 2 security violations.
+
+## WO-039: User Story: WO-039 - Dimension Score Calculator with Weighted Pass-Rate
+- **Status:** completed
+- **Commit:** `971d614`
+- **Files:** 6 (+742/-2)
+- **Duration:** 459ss
+- **Approach:** Added weight: Decimal field (default 1) to RuleEvaluationResult so the scorer has per-rule weights without requiring a separate lookup. Updated _make_result() in threshold.py to populate weight from rule.weight. Created PolicyDimension enum, ContributingFactor, and DimensionScore domain types in scoring.py. DimensionScoreCalculator.calculate_dimension_scores() groups results by dimension, applies weighted pass-rate (INCONCLUSIVE excluded from denominator, ERROR treated as failure), returns all 5 known dimensions always. Unknown dimensions are scored with a warning. All arithmetic uses Decimal with ROUND_HALF_UP and 2dp. Logic verified: all-pass=100, all-fail=0, mixed 4/5=80, all-inconclusive=None, error as fail=50, zero-weight=None.

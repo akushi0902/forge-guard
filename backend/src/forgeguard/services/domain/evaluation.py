@@ -1,10 +1,11 @@
-"""Evaluation domain types for the rule evaluation engine (WO-038)."""
+"""Evaluation domain types for the rule evaluation engine (WO-038, WO-039)."""
 
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 from typing import Any
 
@@ -33,3 +34,4 @@ class RuleEvaluationResult:
     expected_value: Any
     evidence: dict
     evaluated_at: datetime
+    weight: Decimal = field(default_factory=lambda: Decimal("1"))
