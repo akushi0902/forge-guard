@@ -471,6 +471,58 @@ async def get_assessment(
     )
 
 
+@router.get(
+    "/{id}/decision",
+    summary="Get comprehensive combined decision view for a release assessment",
+    dependencies=[Depends(require_permission(Permissions.SERVICE_VIEW))],
+)
+async def get_release_decision_view(
+    id: uuid.UUID,
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> Any:
+    """Return the complete combined decision context for a release assessment.
+
+    Aggregates assessment metadata, health and risk scores, all findings grouped
+    by severity, the system recommendation (computed from current thresholds),
+    escalation status, conditions for conditional approvals, and the human
+    decision record if one has been submitted.
+
+    Accessible to all authenticated roles (service.view permission).
+    Returns 404 for unknown assessment IDs.
+    """
+    from forgeguard.data.repositories.assessment_score_repository import (  # noqa: PLC0415
+        AssessmentScoreRepository,
+    )
+    from forgeguard.data.repositories.decisions import DecisionRepository  # noqa: PLC0415
+    from forgeguard.data.repositories.release_assessment_repository import (  # noqa: PLC0415
+        ReleaseAssessmentRepository,
+    )
+    from forgeguard.services.decision_engine.decision_view_service import (  # noqa: PLC0415
+        CombinedDecisionViewService,
+    )
+
+    assessment_repo = ReleaseAssessmentRepository(pool)
+    score_repo = AssessmentScoreRepository(pool)
+    decision_repo = DecisionRepository(pool)
+
+    svc = CombinedDecisionViewService(assessment_repo, score_repo, decision_repo)
+    view = await svc.get_combined_view(id)
+
+    if view is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Release assessment not found"},
+        )
+
+    logger.info(
+        "releases.decision_view.served",
+        assessment_id=str(id),
+        recommendation=view.system_recommendation.decision,
+    )
+
+    return view.model_dump(mode="json")
+
+
 @router.post(
     "/{id}/decide",
     response_model=ReleaseDecisionResponse,
