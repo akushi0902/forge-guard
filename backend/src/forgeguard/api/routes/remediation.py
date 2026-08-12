@@ -23,10 +23,16 @@ from fastapi.responses import JSONResponse
 
 from forgeguard.api.dependencies.audit import get_audit_service
 from forgeguard.api.dependencies.auth import CurrentUser, CurrentUserDep
-from forgeguard.api.schemas.exception import ExceptionRequest, ExceptionResponse
+from forgeguard.api.schemas.exception import (
+    ExceptionDecisionRequest,
+    ExceptionDecisionResponse,
+    ExceptionListResponse,
+    ExceptionRequest,
+    ExceptionResponse,
+)
 from forgeguard.api.schemas.remediation import ReEvaluationResponse, RemediationResponse
 from forgeguard.core.dependencies import get_pool
-from forgeguard.core.exceptions import BadRequestError, ConflictError, NotFoundError
+from forgeguard.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from forgeguard.core.permissions import Permissions, has_permission
 from forgeguard.data.repositories.exception_repository import ExceptionRepository
 from forgeguard.data.repositories.findings import FindingRepository
@@ -126,6 +132,33 @@ async def _require_exception_request(current_user: CurrentUserDep) -> CurrentUse
 
 
 ExceptionRequestDep = Annotated[CurrentUser, Depends(_require_exception_request)]
+
+
+_APPROVE_FORBIDDEN_MSG = (
+    "This action requires the exception.approve permission. "
+    "Security Reviewers and Platform Admins may decide exception requests."
+)
+
+
+async def _require_exception_approve(current_user: CurrentUserDep) -> CurrentUser:
+    """Enforce exception.approve permission (platform_admin) or security_reviewer role."""
+    can_approve = has_permission(current_user.role, Permissions.EXCEPTION_APPROVE) or \
+        has_permission(current_user.role, Permissions.RELEASE_BLOCK)
+    if not can_approve:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": {
+                    "code": "forbidden",
+                    "message": _APPROVE_FORBIDDEN_MSG,
+                    "details": None,
+                }
+            },
+        )
+    return current_user
+
+
+ExceptionApproveDep = Annotated[CurrentUser, Depends(_require_exception_approve)]
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +350,7 @@ async def re_evaluate_finding(
         data_collector=MockDataCollector(),
     )
 
-    from forgeguard.core.exceptions import BadRequestError, ConflictError, NotFoundError  # noqa: PLC0415
+    from forgeguard.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError  # noqa: PLC0415
 
     try:
         return await svc.re_evaluate(
@@ -339,3 +372,104 @@ async def re_evaluate_finding(
             status_code=409,
             detail={"detail": str(exc), "error_code": err_code},
         )
+
+
+@router.post(
+    "/api/v1/exceptions/{exception_id}/decide",
+    response_model=ExceptionDecisionResponse,
+    status_code=200,
+    summary="Approve or deny a pending exception request",
+)
+async def decide_exception(
+    exception_id: uuid.UUID,
+    body: ExceptionDecisionRequest,
+    current_user: ExceptionApproveDep,
+    svc: ExceptionService = Depends(get_exception_service),
+) -> ExceptionDecisionResponse:
+    """Approve or deny a pending exception request.
+
+    Security-dimension exceptions must be decided by Security Reviewer;
+    all other exceptions must be decided by Platform Admin.  Role enforcement
+    is performed inside the service based on the exception's approver_role.
+    """
+    try:
+        result = await svc.decide_exception(
+            exception_id=exception_id,
+            decision=body.decision,
+            decision_comment=body.decision_comment,
+            actor_id=str(current_user.user_id),
+            actor_role=current_user.role,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail={"detail": str(exc)})
+    except ForbiddenError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"detail": str(exc), "required_role": (exc.details or {}).get("required_role", "")},
+        )
+    except BadRequestError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": str(exc), "error_code": (exc.details or {}).get("error_code", "BAD_REQUEST")},
+        )
+    except ConflictError as exc:
+        raise HTTPException(status_code=409, detail={"detail": str(exc)})
+
+    return ExceptionDecisionResponse(
+        id=result["id"],
+        finding_id=result["finding_id"],
+        status=result["status"],
+        decided_by=result.get("decided_by"),
+        decision_comment=result["decision_comment"],
+        decided_at=result["decided_at"],
+        finding_status=result["finding_status"],
+        health_score_impact=result.get("health_score_impact"),
+    )
+
+
+@router.get(
+    "/api/v1/exceptions",
+    response_model=ExceptionListResponse,
+    summary="List exceptions with optional status and approver_role filters",
+)
+async def list_exceptions(
+    current_user: CurrentUserDep,
+    exception_repo: ExceptionRepository = Depends(get_exception_repo),
+    status: Optional[str] = Query(default=None, description="Filter by status (e.g. 'pending')"),
+    approver_role: Optional[str] = Query(default=None, description="Filter by approver_role"),
+    cursor: Optional[str] = Query(default=None, description="Pagination cursor"),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> ExceptionListResponse:
+    """Return a paginated list of exceptions matching the given filters.
+
+    Approvers use ``?status=pending&approver_role={role}`` to view their queue.
+    """
+    if not has_permission(current_user.role, Permissions.SERVICE_VIEW):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": {"code": "forbidden", "message": "service.view permission required", "details": None}},
+        )
+
+    rows = await exception_repo.list_by_status_and_role(
+        status=status,
+        approver_role=approver_role,
+        cursor=cursor,
+        limit=limit,
+    )
+    total = await exception_repo.count_by_status_and_role(
+        status=status,
+        approver_role=approver_role,
+    )
+
+    items = [_exception_response(row) for row in rows]
+
+    last_cursor = None
+    if rows:
+        last_row = rows[-1]
+        created_at = last_row.get("created_at")
+        row_id = last_row.get("id")
+        if created_at and row_id:
+            ts = created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at)
+            last_cursor = f"{ts}:{row_id}"
+
+    return ExceptionListResponse(items=items, total=total, cursor=last_cursor)

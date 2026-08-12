@@ -1,4 +1,4 @@
-"""ExceptionService: exception request submission and approver routing (WO-062).
+"""ExceptionService: exception request submission, routing, and decision (WO-062, WO-064).
 
 Routing rules (business-defined, tested independently):
   - finding.dimension == 'security'  →  approver_role = 'security_reviewer'
@@ -16,7 +16,7 @@ from typing import Any, Optional
 
 import structlog
 
-from forgeguard.core.exceptions import BadRequestError, ConflictError, NotFoundError
+from forgeguard.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from forgeguard.data.repositories.exception_repository import ExceptionRepository
 from forgeguard.data.repositories.findings import FindingRepository
 from forgeguard.services.audit import AuditService
@@ -161,3 +161,158 @@ class ExceptionService:
     ) -> dict[str, Any] | None:
         """Return a single exception record by ID, or None."""
         return await self._exception_repo.get_by_id(exception_id)
+
+    async def decide_exception(
+        self,
+        *,
+        exception_id: str | uuid.UUID,
+        decision: str,
+        decision_comment: str,
+        actor_id: str | None,
+        actor_role: str,
+    ) -> dict[str, Any]:
+        """Approve or deny a pending exception request.
+
+        Args:
+            exception_id:      UUID of the exception to decide.
+            decision:          'approved' or 'denied'.
+            decision_comment:  Mandatory comment (≥10 chars, already validated).
+            actor_id:          UUID string of the deciding user.
+            actor_role:        Role string of the deciding user.
+
+        Returns:
+            Decision result dict including finding_status and health_score_impact.
+
+        Raises:
+            NotFoundError:   Exception or finding not found.
+            ConflictError:   Exception already decided (409) or expired (409).
+            ForbiddenError:  Actor role does not match exception.approver_role (403).
+            BadRequestError: Finding is already resolved — approval not needed (400).
+        """
+        exception = await self._exception_repo.get_by_id(exception_id)
+        if exception is None:
+            raise NotFoundError(f"Exception {exception_id} not found.")
+
+        exc_status = exception.get("status", "")
+        if exc_status == "expired":
+            raise ConflictError("Exception has expired.")
+        if exc_status != "pending":
+            raise ConflictError("Exception already decided.")
+
+        required_role = exception.get("approver_role", "")
+        if actor_role != required_role:
+            raise ForbiddenError(
+                f"This exception requires approval from {required_role} role",
+                details={"required_role": required_role},
+            )
+
+        finding_id = exception.get("finding_id")
+        finding = await self._finding_repo.get_by_id(finding_id)
+        if finding is None:
+            raise NotFoundError(f"Finding {finding_id} not found.")
+
+        finding_status_before = finding.get("status", "")
+
+        if decision == "approved" and finding_status_before == "remediated":
+            raise BadRequestError(
+                "Finding already resolved, exception not needed",
+                details={"error_code": "FINDING_ALREADY_RESOLVED"},
+            )
+
+        requested_by = exception.get("requested_by")
+        if actor_id and requested_by and str(actor_id) == str(requested_by):
+            logger.warning(
+                "exception_service.self_approval_detected",
+                exception_id=str(exception_id),
+                actor_id=str(actor_id),
+            )
+
+        now = datetime.now(timezone.utc)
+        decided_by = uuid.UUID(str(actor_id)) if actor_id else None
+
+        updated_exception = await self._exception_repo.update_decision(
+            exception_id,
+            status=decision,
+            decided_by=decided_by,
+            decided_at=now,
+            decision_comment=decision_comment,
+        )
+        if updated_exception is None:
+            raise ConflictError("Exception already decided.")
+
+        finding_status_after = finding_status_before
+        if decision == "approved":
+            try:
+                updated_finding = await self._finding_repo.update_status(
+                    finding_id, "exception_granted"
+                )
+                if updated_finding:
+                    finding_status_after = updated_finding.get("status", "exception_granted")
+            except Exception as exc:
+                logger.error(
+                    "exception_service.finding_status_update_failed",
+                    exception_id=str(exception_id),
+                    finding_id=str(finding_id),
+                    error=str(exc),
+                )
+
+        health_score_impact = None
+        if decision == "approved":
+            service_id = str(finding.get("service_id", ""))
+            health_score_impact = await self._trigger_health_score_recalculation(service_id)
+
+        await self._audit_log(
+            actor_id=actor_id,
+            actor_role=actor_role,
+            action=f"exception.{decision}",
+            resource_type="exception",
+            resource_id=exception_id,
+            before_state={"status": exc_status},
+            after_state=self._row_to_serializable(updated_exception),
+        )
+        if decision == "approved":
+            await self._audit_log(
+                actor_id=actor_id,
+                actor_role=actor_role,
+                action="finding.excepted",
+                resource_type="finding",
+                resource_id=finding_id,
+                before_state={"status": finding_status_before},
+                after_state={"status": finding_status_after},
+            )
+
+        exc_id = updated_exception.get("id") if updated_exception else exception.get("id")
+        exc_finding_id = updated_exception.get("finding_id") if updated_exception else finding_id
+
+        logger.info(
+            "exception_service.decision_recorded",
+            exception_id=str(exception_id),
+            decision=decision,
+            actor_role=actor_role,
+        )
+        return {
+            "id": exc_id,
+            "finding_id": exc_finding_id,
+            "status": decision,
+            "decided_by": decided_by,
+            "decision_comment": decision_comment,
+            "decided_at": now,
+            "finding_status": finding_status_after,
+            "health_score_impact": health_score_impact,
+        }
+
+    async def _trigger_health_score_recalculation(self, service_id: str) -> dict | None:
+        """Emit a recalculation trigger for the health scoring pipeline (non-fatal)."""
+        try:
+            logger.info(
+                "exception_service.trigger_health_score_recalculation",
+                service_id=service_id,
+                action="health_score.recalculation_requested",
+            )
+        except Exception as exc:
+            logger.error(
+                "exception_service.health_score_recalculation_failed",
+                service_id=service_id,
+                error=str(exc),
+            )
+        return None

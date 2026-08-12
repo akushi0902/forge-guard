@@ -145,6 +145,8 @@ ROUTE_PERMISSION_MAP: list[RoutePermission] = [
     RoutePermission("GET",  "/api/v1/exceptions/*",          [Permissions.SERVICE_VIEW]),
     RoutePermission("POST", "/api/v1/exceptions",            [Permissions.EXCEPTION_REQUEST]),
     RoutePermission("POST", "/api/v1/exceptions/*/approve",  [Permissions.EXCEPTION_APPROVE]),
+    # /decide must appear before wildcard GET /exceptions/* (first-match wins).
+    RoutePermission("POST", "/api/v1/exceptions/*/decide",   [Permissions.EXCEPTION_APPROVE, Permissions.RELEASE_BLOCK]),
 
     # ------------------------------------------------------------------
     # Admin — RBAC management (WO-027 + WO-028)

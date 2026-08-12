@@ -1,8 +1,9 @@
-"""ExceptionRepository: async CRUD for the exceptions table (WO-062)."""
+"""ExceptionRepository: async CRUD for the exceptions table (WO-062, WO-064)."""
 
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any
 
 import asyncpg
@@ -174,3 +175,101 @@ class ExceptionRepository(BaseRepository):
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(q, uuid.UUID(str(id)))
         return self._row(row)
+
+    async def update_decision(
+        self,
+        id: str | uuid.UUID,
+        *,
+        status: str,
+        decided_by: uuid.UUID | None,
+        decided_at: datetime,
+        decision_comment: str,
+    ) -> dict[str, Any] | None:
+        """Atomically record an approve/deny decision on a pending exception.
+
+        Only updates rows whose current status is 'pending' to prevent
+        double-decision races.  Returns None if no row matched (already decided).
+        """
+        q = (
+            "UPDATE exceptions "
+            "SET status = $1, decided_by = $2, decided_at = $3, "
+            "decision_comment = $4, updated_at = NOW() "
+            "WHERE id = $5 AND status = 'pending' "
+            "RETURNING *"
+        )
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                q, status, decided_by, decided_at, decision_comment, uuid.UUID(str(id))
+            )
+        return self._row(row)
+
+    async def list_by_status_and_role(
+        self,
+        *,
+        status: str | None = None,
+        approver_role: str | None = None,
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Return exceptions filtered by status and/or approver_role.
+
+        Cursor-based pagination using (created_at DESC, id DESC).
+        Pass the last row's ``{created_at.isoformat()}:{id}`` as *cursor*.
+        """
+        params: list[Any] = []
+        idx = 1
+        q = "SELECT * FROM exceptions WHERE TRUE"
+
+        if status:
+            q += f" AND status = ${idx}"
+            params.append(status)
+            idx += 1
+
+        if approver_role:
+            q += f" AND approver_role = ${idx}"
+            params.append(approver_role)
+            idx += 1
+
+        if cursor:
+            try:
+                ts_part, id_part = cursor.rsplit(":", 1)
+                q += f" AND (created_at, id) < (${idx}::timestamptz, ${idx + 1})"
+                params.append(ts_part)
+                params.append(uuid.UUID(id_part))
+                idx += 2
+            except (ValueError, AttributeError):
+                logger.warning(
+                    "exceptions.list_by_status_and_role.invalid_cursor", cursor=cursor
+                )
+
+        q += f" ORDER BY created_at DESC, id DESC LIMIT ${idx}"
+        params.append(limit)
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(q, *params)
+        return self._rows(rows)
+
+    async def count_by_status_and_role(
+        self,
+        *,
+        status: str | None = None,
+        approver_role: str | None = None,
+    ) -> int:
+        """Return the total count of exceptions matching the given filters."""
+        params: list[Any] = []
+        idx = 1
+        q = "SELECT COUNT(*) FROM exceptions WHERE TRUE"
+
+        if status:
+            q += f" AND status = ${idx}"
+            params.append(status)
+            idx += 1
+
+        if approver_role:
+            q += f" AND approver_role = ${idx}"
+            params.append(approver_role)
+            idx += 1
+
+        async with self._pool.acquire() as conn:
+            count = await conn.fetchval(q, *params)
+        return int(count or 0)

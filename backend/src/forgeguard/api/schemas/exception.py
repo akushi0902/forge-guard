@@ -1,10 +1,10 @@
-"""Pydantic request/response schemas for exception request API (WO-062)."""
+"""Pydantic request/response schemas for exception request API (WO-062, WO-064)."""
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -59,3 +59,41 @@ class ExceptionResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ExceptionDecisionRequest(BaseModel):
+    """Request body for POST /api/v1/exceptions/{exception_id}/decide."""
+
+    decision: Literal["approved", "denied"]
+    decision_comment: str = Field(..., min_length=10)
+
+
+class HealthScoreImpact(BaseModel):
+    """Before/after health score delta from an exception approval."""
+
+    before: float
+    after: float
+    delta: float
+
+
+class ExceptionDecisionResponse(BaseModel):
+    """Response body for POST /api/v1/exceptions/{exception_id}/decide."""
+
+    id: uuid.UUID
+    finding_id: uuid.UUID
+    status: str
+    decided_by: Optional[uuid.UUID] = None
+    decision_comment: str
+    decided_at: datetime
+    finding_status: str
+    health_score_impact: Optional[HealthScoreImpact] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ExceptionListResponse(BaseModel):
+    """Paginated list of exceptions."""
+
+    items: list[ExceptionResponse]
+    total: int
+    cursor: Optional[str] = None

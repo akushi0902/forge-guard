@@ -40,6 +40,7 @@ VALID_TRANSITIONS: dict[FindingStatus, frozenset[FindingStatus]] = {
     }),
     FindingStatus.ACKNOWLEDGED: frozenset({
         FindingStatus.REMEDIATED,
+        FindingStatus.EXCEPTION_GRANTED,
     }),
     FindingStatus.REMEDIATED: frozenset({
         FindingStatus.REOPENED,
