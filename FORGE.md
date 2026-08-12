@@ -553,3 +553,10 @@
 - **Files:** 9 (+2111/-2)
 - **Duration:** 803ss
 - **Approach:** Implemented the full demo governance evaluation pipeline via a DemoEvaluationService orchestrator that: (1) loads the Payment Service and active policy rules from the database, (2) collects simulated data via MockDataCollector, (3) evaluates all rules using the existing RuleEvaluationEngine with a _RuleAdapter that bridges dict rows to the duck-typed evaluator interface (including rule.policy.dimension via a _PolicyRef stub), (4) calculates per-dimension scores as (sum_passing_weights / sum_total_weights * 100) and the weighted-average overall Health Score, (5) generates AI explanations and remediation recommendations via AIEngineService with CircuitOpenError + Exception catch-all falling back to template dicts keyed by data_key and dimension, (6) persists ASSESSMENTS/ASSESSMENT_SCORES/FINDINGS/REMEDIATION_RECOMMENDATIONS records best-effort (non-fatal failure), and (7) writes an immutable AUDIT_LOGS entry. The POST /api/v1/demo/evaluate endpoint is added to the existing demo router with lazy imports and AuthenticatedDep for RBAC.
+
+## WO-061: User Story: WO-061 - Finding Re-evaluation API with Before-After Comparison
+- **Status:** completed
+- **Commit:** `b74ddb9`
+- **Files:** 7 (+1302/-2)
+- **Duration:** 698ss
+- **Approach:** Added a POST /api/v1/findings/{finding_id}/re-evaluate endpoint using the existing route/schema/service pattern. The ReEvaluationService captures before-state, re-runs all active policy rules via RuleEvaluationEngine (using the same _RuleAdapter/_PolicyRef bridge pattern from WO-056), applies an optimistic-locking update (version column via WHERE id=$N AND version=$M), recalculates the weighted-aggregate Health Score, and returns a structured before/after comparison. AI guidance generation falls back gracefully when the circuit is open.

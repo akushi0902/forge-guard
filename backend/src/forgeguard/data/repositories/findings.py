@@ -24,6 +24,7 @@ _ALLOWED_INSERT: frozenset[str] = frozenset({
 _ALLOWED_UPDATE: frozenset[str] = frozenset({
     "assessment_id", "severity", "status", "title", "description", "evidence",
     "ai_explanation", "confidence_score", "resolved_at", "escalation_required",
+    "version",
 })
 
 
@@ -265,4 +266,54 @@ class FindingRepository(BaseRepository):
         )
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(q, target.value, uuid.UUID(str(id)))
+        return self._row(row)
+
+    async def update_with_optimistic_lock(
+        self,
+        id: str | uuid.UUID,
+        expected_version: int,
+        data: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Update finding fields only when the version matches, then increment version.
+
+        Returns the updated row, or None if the finding does not exist.
+
+        Raises:
+            ConflictError: If the row was modified concurrently (version mismatch).
+        """
+        from forgeguard.core.exceptions import ConflictError  # noqa: PLC0415
+
+        set_clause, values = self._safe_update_clause(_ALLOWED_UPDATE, data)
+        if not set_clause:
+            # No updatable fields; check version only
+            existing = await self.get_by_id(id)
+            if existing is None:
+                return None
+            if existing.get("version", 1) != expected_version:
+                raise ConflictError(
+                    "Concurrent re-evaluation in progress — the finding was modified.",
+                    details={"error_code": "OPTIMISTIC_LOCK_CONFLICT"},
+                )
+            return existing
+
+        fid = uuid.UUID(str(id))
+        # Append the version increment and WHERE version = $N clause
+        values.append(fid)
+        values.append(expected_version)
+        q = (
+            f"UPDATE findings SET {set_clause}, version = version + 1, updated_at = NOW() "
+            f"WHERE id = ${len(values) - 1} AND version = ${len(values)} RETURNING *"
+        )
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(q, *values)
+
+        if row is None:
+            # Check if the finding exists at all (to distinguish 404 from 409)
+            existing = await self.get_by_id(id)
+            if existing is None:
+                return None
+            raise ConflictError(
+                "Concurrent re-evaluation in progress — the finding was modified.",
+                details={"error_code": "OPTIMISTIC_LOCK_CONFLICT"},
+            )
         return self._row(row)

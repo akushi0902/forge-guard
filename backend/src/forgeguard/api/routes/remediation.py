@@ -24,7 +24,7 @@ from fastapi.responses import JSONResponse
 from forgeguard.api.dependencies.audit import get_audit_service
 from forgeguard.api.dependencies.auth import CurrentUser, CurrentUserDep
 from forgeguard.api.schemas.exception import ExceptionRequest, ExceptionResponse
-from forgeguard.api.schemas.remediation import RemediationResponse
+from forgeguard.api.schemas.remediation import ReEvaluationResponse, RemediationResponse
 from forgeguard.core.dependencies import get_pool
 from forgeguard.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from forgeguard.core.permissions import Permissions, has_permission
@@ -262,3 +262,80 @@ async def get_exception(
             detail={"detail": f"Exception {exception_id} not found"},
         )
     return _exception_response(row)
+
+
+@router.post(
+    "/api/v1/findings/{finding_id}/re-evaluate",
+    response_model=ReEvaluationResponse,
+    status_code=200,
+    summary="Re-evaluate a finding after a remediation attempt",
+    description=(
+        "Captures the before-state, re-runs the relevant policy checks, updates the "
+        "finding status based on results, recalculates the Health Score, and returns a "
+        "structured before/after comparison. Requires assessment.request permission."
+    ),
+)
+async def re_evaluate_finding(
+    finding_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUserDep,
+    pool: asyncpg.Pool = Depends(get_pool),
+    audit_svc: AuditService = Depends(get_audit_service),
+) -> ReEvaluationResponse:
+    """Trigger re-evaluation of an open finding to verify a remediation fix."""
+    if not has_permission(current_user.role, Permissions.ASSESSMENT_REQUEST):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": {
+                    "code": "forbidden",
+                    "message": (
+                        "This action requires the assessment.request permission. "
+                        "Developers, Tech Leads, and Platform Admins may re-evaluate findings."
+                    ),
+                    "details": None,
+                }
+            },
+        )
+
+    from forgeguard.core.dependencies import get_ai_engine  # noqa: PLC0415
+    from forgeguard.data.repositories.assessment_repository import AssessmentRepository  # noqa: PLC0415
+    from forgeguard.data.repositories.assessment_score_repository import AssessmentScoreRepository  # noqa: PLC0415
+    from forgeguard.data.repositories.policies import PolicyRepository  # noqa: PLC0415
+    from forgeguard.services.evaluation_engine import RuleEvaluationEngine  # noqa: PLC0415
+    from forgeguard.services.mock_data_collector import MockDataCollector  # noqa: PLC0415
+    from forgeguard.services.remediation.reevaluation_service import ReEvaluationService  # noqa: PLC0415
+
+    svc = ReEvaluationService(
+        finding_repo=FindingRepository(pool),
+        policy_repo=PolicyRepository(pool),
+        score_repo=AssessmentScoreRepository(pool),
+        assessment_repo=AssessmentRepository(pool),
+        audit_svc=audit_svc,
+        ai_engine=get_ai_engine(),
+        evaluation_engine=RuleEvaluationEngine(),
+        data_collector=MockDataCollector(),
+    )
+
+    from forgeguard.core.exceptions import BadRequestError, ConflictError, NotFoundError  # noqa: PLC0415
+
+    try:
+        return await svc.re_evaluate(
+            finding_id,
+            actor_id=str(current_user.user_id),
+            actor_role=current_user.role,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail={"detail": str(exc)})
+    except BadRequestError as exc:
+        err_code = (exc.details or {}).get("error_code", "BAD_REQUEST")
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": str(exc), "error_code": err_code},
+        )
+    except ConflictError as exc:
+        err_code = (exc.details or {}).get("error_code", "CONFLICT")
+        raise HTTPException(
+            status_code=409,
+            detail={"detail": str(exc), "error_code": err_code},
+        )
