@@ -106,13 +106,22 @@ class SchedulerService:
             misfire_grace_time=3600,
         )
 
-        # 04:00 UTC — AI conversations + expired exceptions purge
+        # 04:00 UTC — AI conversations purge + exception expiry (status transition)
         scheduler.add_job(
             _run_ai_conversations_purge,
             CronTrigger(hour=4, minute=0, timezone="UTC"),
             id="purge_ai_conversations",
             name="AI Conversations Purge",
             kwargs={"settings": settings},
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
+        # 04:00 UTC — exception expiry: approved → expired + finding reactivation
+        scheduler.add_job(
+            _run_exception_expiry,
+            CronTrigger(hour=4, minute=0, timezone="UTC"),
+            id="exception_expiry",
+            name="Exception Expiry Scheduler",
             replace_existing=True,
             misfire_grace_time=3600,
         )
@@ -231,3 +240,22 @@ async def _run_exceptions_purge(settings: "Settings") -> None:
         await svc.purge_expired_exceptions()
     except Exception as exc:
         logger.error("scheduler.job.failed", job="purge_exceptions", error=str(exc))
+
+
+async def _run_exception_expiry() -> None:
+    """Daily job: transition approved+expired exceptions to 'expired' status
+    and reactivate their associated findings (WO-063)."""
+    try:
+        from forgeguard.data.database import get_pool  # noqa: PLC0415
+        from forgeguard.data.repositories.audit_logs import AuditLogRepository  # noqa: PLC0415
+        from forgeguard.services.audit import AuditService  # noqa: PLC0415
+        from forgeguard.services.remediation.exception_expiry_scheduler import (  # noqa: PLC0415
+            ExceptionExpiryScheduler,
+        )
+
+        pool = await get_pool()
+        audit_service = AuditService(AuditLogRepository(pool))
+        scheduler = ExceptionExpiryScheduler(pool=pool, audit_service=audit_service)
+        await scheduler.process_expired_exceptions()
+    except Exception as exc:
+        logger.error("scheduler.job.failed", job="exception_expiry", error=str(exc))

@@ -27,6 +27,7 @@ from fastapi.responses import JSONResponse
 
 from forgeguard.api.routes.admin import router as admin_router
 from forgeguard.api.routes.admin_audit import router as admin_audit_router
+from forgeguard.api.routes.admin_expiry import router as admin_expiry_router
 from forgeguard.api.routes.admin_rbac import router as admin_rbac_router
 from forgeguard.api.routes.audit import router as audit_router
 from forgeguard.api.routes.auth import router as auth_router
@@ -199,6 +200,9 @@ def create_app() -> FastAPI:
 
     # Audit log query endpoint (Platform Admin and Security Reviewer) — WO-029.
     app.include_router(admin_audit_router)
+
+    # Manual exception expiry trigger (Platform Admin, WO-063).
+    app.include_router(admin_expiry_router)
 
     # Audit log query API (Platform Admin only) — WO-031.
     app.include_router(audit_router)

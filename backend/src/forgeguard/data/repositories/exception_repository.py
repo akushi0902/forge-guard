@@ -139,3 +139,38 @@ class ExceptionRepository(BaseRepository):
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(q, approver_role)
         return self._rows(rows)
+
+    async def list_expired_for_processing(
+        self, *, batch_size: int = 50
+    ) -> list[dict[str, Any]]:
+        """Return approved exceptions whose expires_at has passed, up to batch_size.
+
+        Uses the database server clock (NOW()) to avoid application clock skew.
+        Idempotent: only returns status='approved' rows — already-expired rows
+        are excluded because their status will have been updated to 'expired'.
+        """
+        q = (
+            "SELECT * FROM exceptions "
+            "WHERE status = 'approved' AND expires_at < NOW() "
+            "ORDER BY expires_at ASC "
+            "LIMIT $1"
+        )
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(q, batch_size)
+        return self._rows(rows)
+
+    async def expire(self, id: str | uuid.UUID) -> dict[str, Any] | None:
+        """Transition an exception status from 'approved' to 'expired'.
+
+        Uses a WHERE clause guard to ensure idempotency: the update is a no-op
+        if the exception is already in a non-approved state.
+        """
+        q = (
+            "UPDATE exceptions "
+            "SET status = 'expired', updated_at = NOW() "
+            "WHERE id = $1 AND status = 'approved' "
+            "RETURNING *"
+        )
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(q, uuid.UUID(str(id)))
+        return self._row(row)

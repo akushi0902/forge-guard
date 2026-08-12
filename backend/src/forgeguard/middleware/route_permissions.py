@@ -190,8 +190,9 @@ ROUTE_PERMISSION_MAP: list[RoutePermission] = [
     # ------------------------------------------------------------------
     RoutePermission("*", "/api/v1/admin/policies",              [Permissions.POLICY_MANAGE]),
     RoutePermission("*", "/api/v1/admin/policies/*",            [Permissions.POLICY_MANAGE]),
-    RoutePermission("*", "/api/v1/admin/prompt-templates",      [Permissions.POLICY_MANAGE]),
-    RoutePermission("*", "/api/v1/admin/prompt-templates/*",    [Permissions.POLICY_MANAGE]),
+    RoutePermission("*", "/api/v1/admin/prompt-templates",          [Permissions.POLICY_MANAGE]),
+    RoutePermission("*", "/api/v1/admin/prompt-templates/*",        [Permissions.POLICY_MANAGE]),
+    RoutePermission("POST", "/api/v1/admin/run-expiration-check",   [Permissions.POLICY_MANAGE]),
 
     # ------------------------------------------------------------------
     # Platform health monitoring
