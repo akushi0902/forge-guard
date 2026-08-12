@@ -560,3 +560,10 @@
 - **Files:** 7 (+1302/-2)
 - **Duration:** 698ss
 - **Approach:** Added a POST /api/v1/findings/{finding_id}/re-evaluate endpoint using the existing route/schema/service pattern. The ReEvaluationService captures before-state, re-runs all active policy rules via RuleEvaluationEngine (using the same _RuleAdapter/_PolicyRef bridge pattern from WO-056), applies an optimistic-locking update (version column via WHERE id=$N AND version=$M), recalculates the weighted-aggregate Health Score, and returns a structured before/after comparison. AI guidance generation falls back gracefully when the circuit is open.
+
+## WO-065: User Story: WO-065 - AI Agent Conversation API with Context Retrieval
+- **Status:** completed
+- **Commit:** `d6a692c`
+- **Files:** 14 (+2085/-0)
+- **Duration:** 1070ss
+- **Approach:** Built the AI Agent API bottom-up: Alembic migration for agent_feedback table (ai_conversations already existed from WO-011), AgentRepository with cursor-based pagination and atomic JSONB append, Pydantic schemas, rule-based IntentClassifier (6 categories, keyword patterns), PromptBuilder assembling system prompt + history + context + query, ConversationService orchestrating the 8-step pipeline (classify → load/create → context → prompt → LLM with circuit-breaker fallback → persist → audit → return). Route adds in-function RBAC check, per-user 20 req/min rate limiter, lazy imports, and maps all three endpoints. New AGENT_QUERY permission added to Developer, Tech Lead, Engineering Manager roles; all six routes registered in ROUTE_PERMISSION_MAP.

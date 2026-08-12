@@ -222,4 +222,16 @@ ROUTE_PERMISSION_MAP: list[RoutePermission] = [
     # Demo / mock endpoints (any authenticated user)
     # ------------------------------------------------------------------
     RoutePermission("*", "/api/v1/demo/**", [Permissions.SERVICE_VIEW]),
+
+    # ------------------------------------------------------------------
+    # AI Agent endpoints (WO-065)
+    # POST /query and POST /query/feedback must be ordered before broader wildcard.
+    # ------------------------------------------------------------------
+    RoutePermission("POST", "/api/v1/agent/query/feedback", [Permissions.SERVICE_VIEW]),
+    RoutePermission("POST", "/api/v1/agent/query",          [Permissions.AGENT_QUERY]),
+    RoutePermission("GET",  "/api/v1/agent/conversations",  [Permissions.SERVICE_VIEW]),
+
+    # Remediation findings re-evaluate (WO-061)
+    RoutePermission("POST", "/api/v1/findings/*/re-evaluate", [Permissions.ASSESSMENT_REQUEST]),
+    RoutePermission("GET",  "/api/v1/findings/*/remediation",  [Permissions.SERVICE_VIEW]),
 ]

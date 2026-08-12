@@ -41,6 +41,7 @@ class Permissions:
     TRENDS_VIEW = "trends.view"
     AUDIT_VIEW = "audit.view"
     THRESHOLD_MANAGE = "threshold.manage"
+    AGENT_QUERY = "agent.query"
 
 
 #: Frozenset of every defined permission slug, used by Platform Admin sentinel.
@@ -57,6 +58,7 @@ ALL_PERMISSIONS: frozenset[str] = frozenset({
     Permissions.TRENDS_VIEW,
     Permissions.AUDIT_VIEW,
     Permissions.THRESHOLD_MANAGE,
+    Permissions.AGENT_QUERY,
 })
 
 
@@ -92,6 +94,7 @@ ROLE_PERMISSIONS: dict[UserRole, frozenset[str]] = {
         Permissions.SERVICE_VIEW,
         Permissions.ASSESSMENT_REQUEST,
         Permissions.EXCEPTION_REQUEST,
+        Permissions.AGENT_QUERY,
     }),
     UserRole.tech_lead: frozenset({
         Permissions.SERVICE_VIEW,
@@ -99,6 +102,7 @@ ROLE_PERMISSIONS: dict[UserRole, frozenset[str]] = {
         Permissions.RELEASE_APPROVE,
         Permissions.EXCEPTION_REQUEST,
         Permissions.TRENDS_VIEW,
+        Permissions.AGENT_QUERY,
         # exception.approve is conditional (policy dimension only) — not here
     }),
     UserRole.security_reviewer: frozenset({
@@ -110,6 +114,7 @@ ROLE_PERMISSIONS: dict[UserRole, frozenset[str]] = {
     UserRole.engineering_manager: frozenset({
         Permissions.SERVICE_VIEW,
         Permissions.TRENDS_VIEW,
+        Permissions.AGENT_QUERY,
     }),
     UserRole.operator: frozenset({
         Permissions.SERVICE_VIEW,
