@@ -159,7 +159,8 @@ function PageLoader(): JSX.Element {
 // Lazy page components
 // ---------------------------------------------------------------------------
 
-const DashboardPage   = lazy(() => import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const DashboardPage        = lazy(() => import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const DeveloperDashboard   = lazy(() => import('@/pages/DeveloperDashboard').then((m) => ({ default: m.DeveloperDashboard })));
 const HealthPage      = lazy(() => import('@/pages/HealthPage').then((m) => ({ default: m.HealthPage })));
 const ReleasesPage    = lazy(() => import('@/pages/ReleasesPage').then((m) => ({ default: m.ReleasesPage })));
 const FindingsPage    = lazy(() => import('@/pages/FindingsPage').then((m) => ({ default: m.FindingsPage })));
@@ -228,7 +229,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'dashboard',
-            element: guarded('service:read', <DashboardPage />),
+            element: guarded('service:read', <DeveloperDashboard />),
           },
           {
             path: 'health',

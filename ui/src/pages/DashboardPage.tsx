@@ -1,14 +1,12 @@
 /**
- * Dashboard placeholder page — to be implemented in later WOs.
+ * DashboardPage — thin wrapper that renders DeveloperDashboard (WO-072).
+ *
+ * The actual implementation lives in DeveloperDashboard.tsx so it can be
+ * lazy-loaded independently from the router and tested in isolation.
  */
 import { type JSX } from 'react';
-import { Stack, Text, Title } from '@mantine/core';
+import { DeveloperDashboard } from './DeveloperDashboard';
 
 export function DashboardPage(): JSX.Element {
-  return (
-    <Stack gap="md">
-      <Title order={2}>Dashboard</Title>
-      <Text c="dimmed">Engineering health overview — coming soon.</Text>
-    </Stack>
-  );
+  return <DeveloperDashboard />;
 }

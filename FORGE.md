@@ -567,3 +567,10 @@
 - **Files:** 14 (+2085/-0)
 - **Duration:** 1070ss
 - **Approach:** Built the AI Agent API bottom-up: Alembic migration for agent_feedback table (ai_conversations already existed from WO-011), AgentRepository with cursor-based pagination and atomic JSONB append, Pydantic schemas, rule-based IntentClassifier (6 categories, keyword patterns), PromptBuilder assembling system prompt + history + context + query, ConversationService orchestrating the 8-step pipeline (classify → load/create → context → prompt → LLM with circuit-breaker fallback → persist → audit → return). Route adds in-function RBAC check, per-user 20 req/min rate limiter, lazy imports, and maps all three endpoints. New AGENT_QUERY permission added to Developer, Tech Lead, Engineering Manager roles; all six routes registered in ROUTE_PERMISSION_MAP.
+
+## WO-072: User Story: WO-072 - Build Developer Dashboard with Health Score Display
+- **Status:** completed
+- **Commit:** `590fce0`
+- **Files:** 16 (+1283/-10)
+- **Duration:** 1032ss
+- **Approach:** Built DeveloperDashboard as the primary landing page for the Developer persona. Service context is managed via URL query param (useSearchParams) for shareability. The page composes StatsGrid (4 StatCards), HealthScoreCard (ScoreRing + 5 DimensionBars), FindingsCard (TabBar + DataTable with MSW-tested queries), and EmptyStateCard (3-step onboarding + CTA). Three separate useServiceFindings calls (all/critical/high) provide accurate total_count values for the stats grid without pagination bias. Skeleton loading, error Alert with Retry, and empty-state detection (null API response) are all handled. DashboardPage.tsx was updated to delegate to DeveloperDashboard. The /dashboard route in routes.tsx now uses a lazy-loaded DeveloperDashboard with guarded('service:read') wrapper.
