@@ -2,6 +2,7 @@ import { type JSX } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 
 import { LoginPage } from '@/pages/LoginPage';
+import { PolicyConfiguration } from '@/pages/PolicyConfiguration';
 
 // --------------------------------------------------------------------------
 // Placeholder page components
@@ -102,6 +103,10 @@ const routes: RouteObject[] = [
   {
     path: '/admin',
     element: <AdminPanelPage />,
+  },
+  {
+    path: '/admin/policies',
+    element: <PolicyConfiguration />,
   },
   {
     path: '/operations',

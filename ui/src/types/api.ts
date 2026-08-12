@@ -7,6 +7,71 @@
 // Enums
 // --------------------------------------------------------------------------
 
+export enum PolicyDimension {
+  CodeQuality = 'code_quality',
+  TestCoverage = 'test_coverage',
+  Security = 'security',
+  Documentation = 'documentation',
+  OperationsReadiness = 'operations_readiness',
+}
+
+export enum PolicySeverity {
+  Critical = 'critical',
+  High = 'high',
+  Medium = 'medium',
+  Low = 'low',
+}
+
+// --------------------------------------------------------------------------
+// Policies
+// --------------------------------------------------------------------------
+
+export interface PolicyRule {
+  id: string;
+  name: string;
+  dimension: PolicyDimension;
+  severity: PolicySeverity;
+  threshold: number;
+  description: string | null;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PolicyRulesResponse {
+  items: PolicyRule[];
+  cursor: string | null;
+  total: number;
+}
+
+export interface CreatePolicyRuleBody {
+  name: string;
+  dimension: PolicyDimension;
+  severity: PolicySeverity;
+  threshold: number;
+  description?: string;
+}
+
+export interface UpdatePolicyRuleBody {
+  name?: string;
+  dimension?: PolicyDimension;
+  severity?: PolicySeverity;
+  threshold?: number;
+  description?: string;
+  enabled?: boolean;
+}
+
+export interface DimensionWeight {
+  dimension: PolicyDimension;
+  weight: number;
+}
+
+export interface ScoreThresholds {
+  approve: { min_health: number; max_risk: number };
+  conditional: { min_health: number; max_risk: number };
+  block_explanation: string;
+}
+
 export enum FindingSeverity {
   Critical = 'critical',
   High = 'high',
