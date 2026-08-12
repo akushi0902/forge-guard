@@ -172,6 +172,18 @@ ROUTE_PERMISSION_MAP: list[RoutePermission] = [
     RoutePermission("GET", "/api/v1/audit-logs",        [Permissions.AUDIT_VIEW]),
 
     # ------------------------------------------------------------------
+    # Policies — Policy Guardian CRUD (WO-035)
+    # More specific paths first (first-match wins).
+    # ------------------------------------------------------------------
+    RoutePermission("GET",   "/api/v1/policies",                          [Permissions.SERVICE_VIEW]),
+    RoutePermission("GET",   "/api/v1/policies/*",                        [Permissions.SERVICE_VIEW]),
+    RoutePermission("POST",  "/api/v1/policies",                          [Permissions.POLICY_MANAGE]),
+    RoutePermission("PUT",   "/api/v1/policies/*",                        [Permissions.POLICY_MANAGE]),
+    RoutePermission("POST",  "/api/v1/policies/*/rules",                  [Permissions.POLICY_MANAGE]),
+    RoutePermission("PUT",   "/api/v1/policies/*/rules/*",                [Permissions.POLICY_MANAGE]),
+    RoutePermission("PATCH", "/api/v1/policies/*/rules/*/toggle",         [Permissions.POLICY_MANAGE]),
+
+    # ------------------------------------------------------------------
     # Admin — Policy / prompt template management
     # ------------------------------------------------------------------
     RoutePermission("*", "/api/v1/admin/policies",              [Permissions.POLICY_MANAGE]),

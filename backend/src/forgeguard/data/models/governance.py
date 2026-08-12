@@ -58,6 +58,14 @@ VALID_SEVERITIES: tuple[str, ...] = (
     "low",
 )
 
+VALID_RULE_TYPES: tuple[str, ...] = (
+    "threshold_gte",
+    "threshold_lte",
+    "threshold_eq",
+    "regex_match",
+    "regex_no_match",
+)
+
 _DIMENSION_CHECK_EXPR = (
     "dimension IN ("
     "'code_quality','test_coverage','security',"
