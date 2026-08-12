@@ -343,3 +343,10 @@
 - **Files:** 10 (+1738/-4)
 - **Duration:** 863ss
 - **Approach:** Implemented three REST endpoints for the Release Guardian pipeline using FastAPI BackgroundTasks for async execution. POST /assess returns 202 within the request cycle; the pipeline (ChangeAnalyzer→RiskScorer→ExplanationGenerator) runs in a background task with a 5-minute asyncio timeout. Risk scores are stored in assessment_scores via AssessmentScoreRepository; findings and change analysis are stored as JSONB in release_assessments.change_analysis. Cursor-based pagination uses base64-encoded (created_at|id) composite keys. RBAC is enforced at both middleware level (route_permissions.py) and route level (require_permission Depends). Audit events are written for every POST and every pipeline completion/failure.
+
+## WO-070: User Story: WO-070 - Implement Role-Based Route Guards and Navigation Shell
+- **Status:** completed
+- **Commit:** `10163d7`
+- **Files:** 35 (+1400/-25)
+- **Duration:** 980ss
+- **Approach:** Implemented a two-layer route guard system using React Router 6 nested routes. ProtectedRoute uses the Outlet pattern to gate auth — unauthenticated users are redirected to /login with location state preserved. RoleGuard wraps individual route elements to enforce permission checks against the user's permissions array from the auth store, rendering ForbiddenPage on denial. Navigation config is split into a .ts config file (iconName strings, no JSX) and a .tsx routes file that resolves icons via an ICON_MAP and builds the AppLayout shell. Sidebar was migrated from role-based to permission-based filtering. TopBar gained auto-breadcrumb generation from useLocation(). All 6 roles have distinct nav arrays; 20 placeholder page components were created as route targets.

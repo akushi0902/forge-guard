@@ -3,13 +3,15 @@
  *
  * Structure:
  *   SidebarHeader — logo + product name
- *   SidebarNav    — role-filtered NavLink list
+ *   SidebarNav    — permission-filtered NavLink list
  *   SidebarFooter — collapse toggle
  *
  * Collapse state is persisted via the `useLayoutStore` Zustand store.
+ * Active route is highlighted with Mantine NavLink's built-in active style.
  */
 
 import {
+  Badge,
   Box,
   NavLink,
   Stack,
@@ -20,7 +22,6 @@ import {
 import { type JSX, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLayoutStore } from '@/stores/layout';
-import { type Role } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,14 +31,16 @@ export interface NavItem {
   label: string;
   path: string;
   icon: ReactNode;
-  /** If provided, the item only renders for users with this role. */
-  requiredPermission?: Role;
+  /** If set, the item is only shown to users whose permissions include this slug. */
+  requiredPermission?: string;
+  /** Optional badge count displayed on the nav item. */
+  badgeCount?: number;
 }
 
 export interface SidebarProps {
   navItems: NavItem[];
-  /** Current user role for RBAC filtering. Undefined = show all items. */
-  userRole?: Role;
+  /** Current user permissions for RBAC filtering. Undefined = show all items. */
+  userPermissions?: string[];
   logoSrc?: string;
 }
 
@@ -89,15 +92,24 @@ function SidebarNav({ items, collapsed }: SidebarNavProps): JSX.Element {
     <Stack gap={4} px="xs" py="sm" style={{ flex: 1, overflowY: 'auto' }}>
       {items.map((item) => {
         const isActive = pathname === item.path || pathname.startsWith(item.path + '/');
+        const rightSection =
+          item.badgeCount != null && item.badgeCount > 0 ? (
+            <Badge size="xs" circle variant="filled" color="red" aria-label={`${item.badgeCount} items`}>
+              {item.badgeCount}
+            </Badge>
+          ) : undefined;
+
         const nav = (
           <NavLink
             key={item.path}
             label={collapsed ? undefined : item.label}
             leftSection={item.icon}
+            rightSection={collapsed ? undefined : rightSection}
             active={isActive}
             onClick={() => navigate(item.path)}
             aria-label={item.label}
             aria-current={isActive ? 'page' : undefined}
+            style={isActive ? { borderLeft: '3px solid var(--mantine-color-brand-5)' } : undefined}
           />
         );
 
@@ -154,15 +166,15 @@ const SIDEBAR_WIDTH_COLLAPSED = 60;
 /**
  * @example
  * <Sidebar
- *   navItems={NAV_ITEMS}
- *   userRole={user.role}
+ *   navItems={resolvedNavItems}
+ *   userPermissions={user.permissions}
  * />
  */
-export function Sidebar({ navItems, userRole, logoSrc }: SidebarProps): JSX.Element {
+export function Sidebar({ navItems, userPermissions, logoSrc }: SidebarProps): JSX.Element {
   const { isSidebarCollapsed, toggleSidebar } = useLayoutStore();
 
   const visibleItems = navItems.filter(
-    (item) => !item.requiredPermission || item.requiredPermission === userRole,
+    (item) => !item.requiredPermission || (userPermissions?.includes(item.requiredPermission) ?? false),
   );
 
   return (

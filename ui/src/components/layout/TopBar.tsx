@@ -2,7 +2,7 @@
  * TopBar — application header bar.
  *
  * Slots:
- *   Breadcrumb        — current page context navigation
+ *   Breadcrumb        — auto-generated from current route or explicit segments
  *   ServiceSelector   — dropdown to switch active service context
  *   UserAvatar        — avatar with user menu (profile, logout)
  *   Dark mode toggle  — switches between light and dark colour scheme
@@ -16,10 +16,39 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import { type JSX } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Breadcrumb, type BreadcrumbSegment } from '@/components/shared/Breadcrumb';
 import { Avatar } from '@/components/shared/Avatar';
 import { Dropdown, type DropdownItem } from '@/components/shared/Dropdown';
 import { type Service } from '@/types';
+
+// ---------------------------------------------------------------------------
+// Auto-breadcrumb generator
+// ---------------------------------------------------------------------------
+
+/** Converts a URL path segment to a human-readable label. */
+function segmentToLabel(segment: string): string {
+  return segment
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Generates BreadcrumbSegment[] from the current pathname.
+ * e.g. /admin/policies → [{ label: 'Admin', href: '/admin' }, { label: 'Policies' }]
+ */
+export function buildBreadcrumbsFromPath(pathname: string): BreadcrumbSegment[] {
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts.length === 0) return [{ label: 'Dashboard' }];
+
+  return parts.map((part, i) => {
+    const href = '/' + parts.slice(0, i + 1).join('/');
+    const isLast = i === parts.length - 1;
+    return isLast
+      ? { label: segmentToLabel(part) }
+      : { label: segmentToLabel(part), href };
+  });
+}
 
 // ---------------------------------------------------------------------------
 // ServiceSelector
@@ -74,6 +103,7 @@ function DarkModeToggle(): JSX.Element {
 // ---------------------------------------------------------------------------
 
 export interface TopBarProps {
+  /** Explicit breadcrumb segments. If omitted, auto-generated from current route. */
   breadcrumbs?: BreadcrumbSegment[];
   services?: Service[];
   selectedServiceId?: string | null;
@@ -86,16 +116,15 @@ export interface TopBarProps {
 /**
  * @example
  * <TopBar
- *   breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Services' }]}
  *   services={services}
  *   selectedServiceId={activeId}
  *   onServiceSelect={setActiveId}
- *   userName={user.displayName}
+ *   userName={user.name}
  *   userMenuItems={[{ key: 'logout', label: 'Log out', onClick: logout }]}
  * />
  */
 export function TopBar({
-  breadcrumbs = [],
+  breadcrumbs,
   services = [],
   selectedServiceId = null,
   onServiceSelect,
@@ -103,6 +132,9 @@ export function TopBar({
   userAvatarSrc,
   userMenuItems = [],
 }: TopBarProps): JSX.Element {
+  const { pathname } = useLocation();
+  const resolvedBreadcrumbs = breadcrumbs ?? buildBreadcrumbsFromPath(pathname);
+
   return (
     <Group
       component="header"
@@ -119,8 +151,8 @@ export function TopBar({
       aria-label="Top navigation bar"
     >
       {/* Left: breadcrumb */}
-      {breadcrumbs.length > 0 ? (
-        <Breadcrumb segments={breadcrumbs} />
+      {resolvedBreadcrumbs.length > 0 ? (
+        <Breadcrumb segments={resolvedBreadcrumbs} />
       ) : (
         <Text size="sm" c="dimmed">
           ForgeGuard

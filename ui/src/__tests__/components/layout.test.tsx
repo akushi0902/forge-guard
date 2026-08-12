@@ -6,7 +6,6 @@ import { Sidebar, type NavItem } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { MainContent } from '@/components/layout/MainContent';
 import { useLayoutStore } from '@/stores/layout';
-import { Role } from '@/types';
 import { mockServices } from '@/test/fixtures';
 
 // Reset Zustand store between tests.
@@ -27,7 +26,7 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Admin Panel',
     path: '/admin',
     icon: ICON,
-    requiredPermission: Role.PlatformAdmin,
+    requiredPermission: 'admin:access',
   },
 ];
 
@@ -44,20 +43,18 @@ describe('Sidebar', () => {
   });
 
   it('hides nav items when user lacks the required permission', () => {
-    render(<Sidebar navItems={NAV_ITEMS} userRole={Role.Developer} />);
+    render(<Sidebar navItems={NAV_ITEMS} userPermissions={['service:read']} />);
     expect(screen.queryByLabelText('Admin Panel')).not.toBeInTheDocument();
   });
 
   it('shows nav items when user has the required permission', () => {
-    render(<Sidebar navItems={NAV_ITEMS} userRole={Role.PlatformAdmin} />);
+    render(<Sidebar navItems={NAV_ITEMS} userPermissions={['service:read', 'admin:access']} />);
     expect(screen.getByLabelText('Admin Panel')).toBeInTheDocument();
   });
 
-  it('shows all items including permission-gated when no userRole is given', () => {
+  it('hides permission-gated items when no userPermissions given', () => {
     render(<Sidebar navItems={NAV_ITEMS} />);
-    // Without userRole, filter passes: !item.requiredPermission is true for first 2,
-    // but item with requiredPermission is hidden unless userRole matches.
-    // Per Sidebar logic: item.requiredPermission === undefined → shown; otherwise hidden.
+    // Without userPermissions, items with requiredPermission are hidden.
     expect(screen.getByLabelText('Dashboard')).toBeInTheDocument();
     expect(screen.getByLabelText('Services')).toBeInTheDocument();
     expect(screen.queryByLabelText('Admin Panel')).not.toBeInTheDocument();

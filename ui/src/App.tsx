@@ -8,7 +8,7 @@ import { type JSX } from 'react';
 import { RouterProvider } from 'react-router-dom';
 
 import { queryClient } from '@/lib/query-client';
-import { router } from '@/router';
+import { router } from '@/config/routes';
 import { theme } from '@/theme';
 
 /**
