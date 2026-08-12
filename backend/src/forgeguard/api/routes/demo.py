@@ -14,8 +14,9 @@ Authentication:
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
+import asyncpg
 import structlog
 from fastapi import APIRouter, Depends, Request
 
@@ -25,7 +26,8 @@ from forgeguard.api.schemas.demo import (
     TransactionCreateRequest,
     TransactionResponse,
 )
-from forgeguard.core.dependencies import get_demo_app_service
+from forgeguard.api.schemas.demo_evaluation import DemoEvaluationResponse
+from forgeguard.core.dependencies import get_demo_app_service, get_pool
 from forgeguard.core.exceptions import ForbiddenError
 from forgeguard.services.demo_app import DemoAppService
 
@@ -156,3 +158,51 @@ async def reset_demo_data(
 ) -> ResetResponse:
     result = await service.reset_demo_data()
     return ResetResponse.model_validate(result)
+
+
+@router.post(
+    "/evaluate",
+    response_model=DemoEvaluationResponse,
+    status_code=200,
+    summary="Trigger full governance evaluation of the Payment Service",
+    description=(
+        "Runs a complete governance evaluation of the ForgeGuard demo Payment Service: "
+        "collects simulated data, evaluates all policy rules, generates findings, "
+        "calculates the Health Score, generates AI explanations with template fallbacks, "
+        "and persists all results. Returns the complete assessment including Health Score, "
+        "dimension breakdown, findings, and remediation recommendations."
+    ),
+)
+async def evaluate_demo_service(
+    request: Request,
+    role: AuthenticatedDep,
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> Any:
+    from forgeguard.data.repositories.assessment_repository import AssessmentRepository  # noqa: PLC0415
+    from forgeguard.data.repositories.assessment_score_repository import AssessmentScoreRepository  # noqa: PLC0415
+    from forgeguard.data.repositories.audit_logs import AuditLogRepository  # noqa: PLC0415
+    from forgeguard.data.repositories.findings import FindingRepository  # noqa: PLC0415
+    from forgeguard.data.repositories.policies import PolicyRepository  # noqa: PLC0415
+    from forgeguard.data.repositories.remediation_recommendation_repository import (  # noqa: PLC0415
+        RemediationRecommendationRepository,
+    )
+    from forgeguard.data.repositories.services import ServiceRepository  # noqa: PLC0415
+    from forgeguard.core.dependencies import get_ai_engine  # noqa: PLC0415
+    from forgeguard.services.demo_evaluation import DemoEvaluationService  # noqa: PLC0415
+    from forgeguard.services.evaluation_engine import RuleEvaluationEngine  # noqa: PLC0415
+    from forgeguard.services.mock_data_collector import MockDataCollector  # noqa: PLC0415
+
+    svc = DemoEvaluationService(
+        policy_repo=PolicyRepository(pool),
+        service_repo=ServiceRepository(pool),
+        assessment_repo=AssessmentRepository(pool),
+        score_repo=AssessmentScoreRepository(pool),
+        finding_repo=FindingRepository(pool),
+        remediation_repo=RemediationRecommendationRepository(pool),
+        audit_repo=AuditLogRepository(pool),
+        ai_engine=get_ai_engine(),
+        data_collector=MockDataCollector(),
+        evaluation_engine=RuleEvaluationEngine(),
+    )
+    result = await svc.evaluate_payment_service(actor_role=role)
+    return result.model_dump(mode="json")

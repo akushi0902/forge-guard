@@ -1,0 +1,119 @@
+{
+  "_comment": "Regression baseline for WO-056 demo evaluation. Expected results for the Payment Service pre-seeded violations (WOREF-055).",
+  "service_id": "d0000000-0000-0000-0000-000000000001",
+  "service_name": "Payment Service",
+  "is_simulated": true,
+  "expected_health_score_range": {
+    "min": 20.0,
+    "max": 70.0,
+    "note": "Score depends on seeded rules. Payment Service has deliberate violations in test_coverage, security, documentation, and operations_readiness dimensions."
+  },
+  "expected_finding_count": {
+    "min": 5,
+    "note": "At minimum: unit_test_coverage FAIL, integration_test_coverage FAIL, mutation_score FAIL, dependency_vulnerabilities FAIL, critical_cve_count FAIL. Additional violations may be seeded."
+  },
+  "expected_dimensions_present": [
+    "code_quality",
+    "test_coverage",
+    "security",
+    "documentation",
+    "operations_readiness"
+  ],
+  "known_violations": [
+    {
+      "data_key": "unit_test_coverage",
+      "dimension": "test_coverage",
+      "severity": "high",
+      "actual_value": 62.5,
+      "threshold": 80.0,
+      "operator": "gte"
+    },
+    {
+      "data_key": "integration_test_coverage",
+      "dimension": "test_coverage",
+      "severity": "medium",
+      "actual_value": 45.0,
+      "threshold": 60.0,
+      "operator": "gte"
+    },
+    {
+      "data_key": "mutation_score",
+      "dimension": "test_coverage",
+      "severity": "medium",
+      "actual_value": 38.0,
+      "threshold": 50.0,
+      "operator": "gte"
+    },
+    {
+      "data_key": "dependency_vulnerabilities",
+      "dimension": "security",
+      "severity": "high",
+      "actual_value": 7,
+      "threshold": 0,
+      "operator": "eq"
+    },
+    {
+      "data_key": "critical_cve_count",
+      "dimension": "security",
+      "severity": "critical",
+      "actual_value": 2,
+      "threshold": 0,
+      "operator": "eq"
+    },
+    {
+      "data_key": "has_readme",
+      "dimension": "documentation",
+      "severity": "high",
+      "actual_value": false,
+      "threshold": true,
+      "operator": "eq"
+    },
+    {
+      "data_key": "api_docs_complete",
+      "dimension": "documentation",
+      "severity": "medium",
+      "actual_value": false,
+      "threshold": true,
+      "operator": "eq"
+    },
+    {
+      "data_key": "slo_defined",
+      "dimension": "operations_readiness",
+      "severity": "high",
+      "actual_value": false,
+      "threshold": true,
+      "operator": "eq"
+    }
+  ],
+  "expected_passing_data_keys": [
+    "cyclomatic_complexity_avg",
+    "code_duplication_pct",
+    "tech_debt_ratio",
+    "changelog_updated",
+    "has_runbook",
+    "on_call_rotation_defined",
+    "deployment_automated",
+    "secrets_detected",
+    "sast_findings_critical"
+  ],
+  "response_schema_requirements": {
+    "assessment_id": "uuid",
+    "service_id": "uuid",
+    "service_name": "string",
+    "is_simulated": true,
+    "health_score.overall": "number 0-100",
+    "health_score.dimensions.code_quality": "number or null",
+    "health_score.dimensions.test_coverage": "number or null",
+    "health_score.dimensions.security": "number or null",
+    "health_score.dimensions.documentation": "number or null",
+    "health_score.dimensions.operations_readiness": "number or null",
+    "findings": "array",
+    "summary.total_findings": "integer",
+    "summary.by_severity.critical": "integer",
+    "summary.by_severity.high": "integer",
+    "summary.by_severity.medium": "integer",
+    "summary.by_severity.low": "integer",
+    "summary.evaluated_at": "datetime",
+    "summary.evaluation_duration_ms": "integer"
+  }
+}
