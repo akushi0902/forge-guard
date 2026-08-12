@@ -350,3 +350,10 @@
 - **Files:** 35 (+1400/-25)
 - **Duration:** 980ss
 - **Approach:** Implemented a two-layer route guard system using React Router 6 nested routes. ProtectedRoute uses the Outlet pattern to gate auth — unauthenticated users are redirected to /login with location state preserved. RoleGuard wraps individual route elements to enforce permission checks against the user's permissions array from the auth store, rendering ForbiddenPage on denial. Navigation config is split into a .ts config file (iconName strings, no JSX) and a .tsx routes file that resolves icons via an ICON_MAP and builds the AppLayout shell. Sidebar was migrated from role-based to permission-based filtering. TopBar gained auto-breadcrumb generation from useLocation(). All 6 roles have distinct nav arrays; 20 placeholder page components were created as route targets.
+
+## WO-028: User Story: WO-028 - Implement RBAC Administration API for User Management
+- **Status:** completed
+- **Commit:** `f528c58`
+- **Files:** 9 (+1515/-5)
+- **Duration:** 719ss
+- **Approach:** Built the RBAC Administration API bottom-up. Extended UserRepository with cursor-based pagination (base64-encoded created_at|id composite key), count_by_role for last-admin protection, update_role, and update_status. Added RBACAdminService to services/rbac.py with async change_user_role (idempotent no-op when role unchanged, last-admin ConflictError, audit record), toggle_user_status (revoke_all_for_user on deactivation, idempotent, audit), list_users, get_user_detail with get_permissions() resolution, and static list_roles. Created admin_rbac.py router with 5 endpoints each protected by _require_rbac_manage (checks rbac.manage via RBACService, returns CurrentUser). Registered in main.py and extended route_permissions.py with specific path entries for /users, /users/*, /users/*/role, /users/*/status, /roles.

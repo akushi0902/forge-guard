@@ -142,10 +142,16 @@ ROUTE_PERMISSION_MAP: list[RoutePermission] = [
     RoutePermission("POST", "/api/v1/exceptions/*/approve", [Permissions.EXCEPTION_APPROVE]),
 
     # ------------------------------------------------------------------
-    # Admin — RBAC management
+    # Admin — RBAC management (WO-027 + WO-028)
+    # More specific patterns first (first-match wins).
     # ------------------------------------------------------------------
-    RoutePermission("*", "/api/v1/admin/rbac",   [Permissions.RBAC_MANAGE]),
-    RoutePermission("*", "/api/v1/admin/rbac/*", [Permissions.RBAC_MANAGE]),
+    RoutePermission("*", "/api/v1/admin/rbac/users",          [Permissions.RBAC_MANAGE]),
+    RoutePermission("*", "/api/v1/admin/rbac/users/*",        [Permissions.RBAC_MANAGE]),
+    RoutePermission("*", "/api/v1/admin/rbac/users/*/role",   [Permissions.RBAC_MANAGE]),
+    RoutePermission("*", "/api/v1/admin/rbac/users/*/status", [Permissions.RBAC_MANAGE]),
+    RoutePermission("*", "/api/v1/admin/rbac/roles",          [Permissions.RBAC_MANAGE]),
+    RoutePermission("*", "/api/v1/admin/rbac",                [Permissions.RBAC_MANAGE]),
+    RoutePermission("*", "/api/v1/admin/rbac/*",              [Permissions.RBAC_MANAGE]),
 
     # ------------------------------------------------------------------
     # Admin — Policy / prompt template management
