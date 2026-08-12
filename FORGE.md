@@ -518,3 +518,10 @@
 - **Files:** 11 (+1146/-11)
 - **Duration:** 882ss
 - **Approach:** Implemented a DB-backed AI response cache distinct from the existing in-memory LRU cache in cache.py. The new DBResponseCache class in services/ai_engine/response_cache.py wraps a CacheRepository and computes deterministic SHA-256 keys from (dimension:severity:policy_rule_id:prompt_template_version). RecommendationService.get_or_generate() checks the DB cache before calling the LLM generator; on miss it generates, persists to rec_repo (unchanged), and stores in the DB cache. Policy rule modifications in the policies route trigger synchronous cache invalidation. The existing rec_repo fallback is preserved as backward-compat when no DB cache is injected. AI_CACHE_TTL_SECONDS was already configured in Settings.
+
+## WO-095: User Story: WO-095 - Unit Tests for Health Score Calculation Engine
+- **Status:** completed
+- **Commit:** `fbb5da6`
+- **Files:** 3 (+1368/-0)
+- **Duration:** 627ss
+- **Approach:** Built tests bottom-up across three files: (1) test_rule_evaluation.py covers all evaluator types (threshold_gte/lte/eq, regex_match/no_match, unknown type) against the RuleEvaluationEngine.evaluate_rules() async interface; (2) test_dimension_scoring.py covers DimensionScoreCalculator with equal/custom weights, all 8 parametrized boundary values (0,1,49,50,69,70,99,100), edge cases (zero rules, zero/negative weights, INCONCLUSIVE exclusion, suppressed findings); (3) test_health_score_calculation.py covers HealthScoreAggregator with all five dims, custom weights, missing dimensions, the full pipeline calculator→aggregator, suppressed/expired exceptions, AI engine zero-call assertions, and 5 determinism tests. All tests use dependency injection, no DB/network.
