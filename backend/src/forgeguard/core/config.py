@@ -168,6 +168,34 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------ #
+    # GitHub Integration
+    # ------------------------------------------------------------------ #
+    github_webhook_secret: str = Field(
+        default="",
+        description=(
+            "HMAC-SHA256 secret for validating incoming GitHub webhook deliveries. "
+            "Must match the secret configured in the GitHub webhook settings. "
+            "Must NEVER appear in logs, error responses, or audit records."
+        ),
+    )
+    github_api_token: str = Field(
+        default="",
+        description=(
+            "GitHub Personal Access Token (or GitHub App token) used to post "
+            "commit status checks and PR comments via the GitHub REST API. "
+            "Must NEVER appear in logs, error responses, or audit records."
+        ),
+    )
+    github_api_base_url: str = Field(
+        default="https://api.github.com",
+        description="GitHub API base URL (override for GitHub Enterprise).",
+    )
+    webhook_rate_limit_per_repo: int = Field(
+        default=60,
+        description="Max webhook requests per minute per repository full_name.",
+    )
+
+    # ------------------------------------------------------------------ #
     # Forge Platform Integration
     # ------------------------------------------------------------------ #
     forge_catalog_url: str = Field(

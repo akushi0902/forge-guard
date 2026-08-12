@@ -36,6 +36,7 @@ from forgeguard.api.routes.platform import router as platform_router
 from forgeguard.api.routes.policies import router as policies_router
 from forgeguard.api.routes.releases import router as releases_router
 from forgeguard.api.routes.remediation import router as remediation_router
+from forgeguard.api.routes.webhooks import router as webhooks_router
 from forgeguard.api.routes.system import router as system_router
 from forgeguard.core.config import Settings, get_settings
 from forgeguard.core.error_handlers import register_error_handlers
@@ -219,6 +220,9 @@ def create_app() -> FastAPI:
 
     # Remediation lifecycle endpoints (WO-062).
     app.include_router(remediation_router)
+
+    # GitHub webhook receiver — HMAC-SHA256 authenticated, no JWT (WO-091).
+    app.include_router(webhooks_router)
 
     # Root stub retained for backward compatibility.
     @app.get("/", tags=["system"], summary="Root liveness probe")

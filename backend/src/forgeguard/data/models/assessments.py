@@ -353,6 +353,9 @@ class ReleaseAssessment(Base):
     )
     commit_sha: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     pr_reference: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
+    trigger_type: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="manual", server_default="'manual'"
+    )
     requested_by: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),

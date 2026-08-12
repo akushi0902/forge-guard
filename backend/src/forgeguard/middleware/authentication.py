@@ -49,6 +49,8 @@ PUBLIC_PATHS: frozenset[str] = frozenset({
     "/api/v1/openapi.json",
     # Root liveness stub.
     "/",
+    # GitHub webhook receiver — authenticated via HMAC-SHA256, not JWT.
+    "/api/v1/webhooks/github",
 })
 
 
