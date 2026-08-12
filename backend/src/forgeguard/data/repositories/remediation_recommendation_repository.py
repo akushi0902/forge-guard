@@ -16,6 +16,7 @@ _ALLOWED_INSERT: frozenset[str] = frozenset({
     "finding_id",
     "recommendation_text",
     "implementation_guide",
+    "business_impact",
     "confidence_score",
     "source",
 })
@@ -99,6 +100,53 @@ class RemediationRecommendationRepository(BaseRepository):
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(q, uuid.UUID(str(finding_id)))
         return self._rows(rows)
+
+    async def get_latest_by_finding_id(
+        self, finding_id: str | uuid.UUID
+    ) -> dict[str, Any] | None:
+        q = (
+            "SELECT * FROM remediation_recommendations "
+            "WHERE finding_id = $1 ORDER BY created_at DESC LIMIT 1"
+        )
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(q, uuid.UUID(str(finding_id)))
+        return self._row(row)
+
+    async def upsert(
+        self,
+        finding_id: str | uuid.UUID,
+        data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Insert a recommendation or replace the existing one for the same finding.
+
+        Uses INSERT … ON CONFLICT (finding_id) DO UPDATE to avoid duplicate rows
+        when concurrent requests generate recommendations for the same finding.
+        """
+        data = {**data, "finding_id": uuid.UUID(str(finding_id))}
+        filtered = [(col, val) for col, val in data.items() if col in _ALLOWED_INSERT]
+        if not filtered:
+            raise ValueError("No allowed columns found for upsert")
+        col_names = ", ".join(col for col, _ in filtered)
+        placeholders = ", ".join(f"${i + 1}" for i in range(len(filtered)))
+        values = [val for _, val in filtered]
+        update_cols = [
+            col for col, _ in filtered
+            if col not in ("id", "finding_id")
+        ]
+        if not update_cols:
+            raise ValueError("No updatable columns found for upsert")
+        update_clause = ", ".join(
+            f"{col} = EXCLUDED.{col}" for col in update_cols
+        )
+        q = (
+            f"INSERT INTO remediation_recommendations ({col_names}) "
+            f"VALUES ({placeholders}) "
+            "ON CONFLICT (finding_id) DO UPDATE SET "
+            f"{update_clause} RETURNING *"
+        )
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(q, *values)
+        return dict(row)  # type: ignore[arg-type]
 
     async def get_by_assessment(
         self, assessment_id: str | uuid.UUID

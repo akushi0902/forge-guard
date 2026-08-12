@@ -1,16 +1,14 @@
-"""Remediation lifecycle API endpoints (WO-062).
+"""Remediation lifecycle API endpoints (WO-058, WO-062).
 
 Routes:
-    POST /api/v1/findings/{finding_id}/exceptions — submit exception request
-    GET  /api/v1/exceptions/{exception_id}        — retrieve exception details
+    GET  /api/v1/findings/{finding_id}/remediation  — get/generate remediation recommendation
+    POST /api/v1/findings/{finding_id}/exceptions   — submit exception request
+    GET  /api/v1/exceptions/{exception_id}          — retrieve exception details
 
 RBAC:
-  - POST: exception.request permission (Developer, Tech Lead, Platform Admin)
-  - GET:  service.view permission (all authenticated roles)
-
-Both routes are guarded by route_permissions.py middleware.  The POST handler
-additionally uses ExceptionRequestDep to enforce exception.request at the
-dependency level and extract the actor identity.
+  - GET remediation: service.view permission (all authenticated roles)
+  - POST exception:  exception.request permission (Developer, Tech Lead, Platform Admin)
+  - GET exception:   service.view permission (all authenticated roles)
 """
 
 from __future__ import annotations
@@ -20,19 +18,27 @@ from typing import Annotated, Optional
 
 import asyncpg
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from forgeguard.api.dependencies.audit import get_audit_service
 from forgeguard.api.dependencies.auth import CurrentUser, CurrentUserDep
 from forgeguard.api.schemas.exception import ExceptionRequest, ExceptionResponse
+from forgeguard.api.schemas.remediation import RemediationResponse
 from forgeguard.core.dependencies import get_pool
 from forgeguard.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from forgeguard.core.permissions import Permissions, has_permission
 from forgeguard.data.repositories.exception_repository import ExceptionRepository
 from forgeguard.data.repositories.findings import FindingRepository
+from forgeguard.data.repositories.remediation_recommendation_repository import (
+    RemediationRecommendationRepository,
+)
+from forgeguard.services.ai_engine.circuit_breaker import CircuitBreaker
+from forgeguard.services.ai_engine.recommendation_generator import RecommendationGenerator
+from forgeguard.services.ai_engine.service import AIEngineService
 from forgeguard.services.audit import AuditService
 from forgeguard.services.remediation.exception_service import ExceptionService
+from forgeguard.services.remediation.recommendation_service import RecommendationService
 
 logger = structlog.get_logger(__name__)
 
@@ -55,6 +61,35 @@ async def get_finding_repo(pool: asyncpg.Pool = Depends(get_pool)) -> FindingRep
 
 async def get_exception_repo(pool: asyncpg.Pool = Depends(get_pool)) -> ExceptionRepository:
     return ExceptionRepository(pool)
+
+
+async def get_rec_repo(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> RemediationRecommendationRepository:
+    return RemediationRecommendationRepository(pool)
+
+
+async def get_recommendation_service(
+    finding_repo: FindingRepository = Depends(get_finding_repo),
+    rec_repo: RemediationRecommendationRepository = Depends(get_rec_repo),
+    audit_svc: AuditService = Depends(get_audit_service),
+) -> RecommendationService:
+    from forgeguard.services.ai_engine.cache import ResponseCache
+    from forgeguard.services.ai_engine.providers.openai_provider import OpenAIProvider
+    from forgeguard.core.config import get_settings
+
+    settings = get_settings()
+    provider = OpenAIProvider(api_key=getattr(settings, "openai_api_key", ""))
+    cb = CircuitBreaker(failure_threshold=5, window_seconds=60, recovery_timeout=30)
+    cache = ResponseCache()
+    ai_engine = AIEngineService(provider=provider, circuit_breaker=cb, cache=cache)
+    generator = RecommendationGenerator(ai_engine=ai_engine)
+    return RecommendationService(
+        finding_repo=finding_repo,
+        rec_repo=rec_repo,
+        generator=generator,
+        audit_svc=audit_svc,
+    )
 
 
 async def get_exception_service(
@@ -108,6 +143,50 @@ def _exception_response(row: dict) -> ExceptionResponse:
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/api/v1/findings/{finding_id}/remediation",
+    response_model=RemediationResponse,
+    summary="Get or generate a remediation recommendation for a finding",
+)
+async def get_remediation(
+    finding_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUserDep,
+    force_refresh: bool = Query(default=False, description="Force regeneration even if cached"),
+    svc: RecommendationService = Depends(get_recommendation_service),
+) -> RemediationResponse:
+    """Return the remediation recommendation for a finding, generating it if needed.
+
+    The recommendation is cached — subsequent calls return the same record
+    unless force_refresh=true is supplied.  Source is 'ai_generated' when the
+    LLM was available, or 'template_fallback' when the circuit breaker was open.
+    """
+    correlation_id = request.headers.get("x-request-id")
+    try:
+        rec = await svc.get_or_generate(
+            finding_id=finding_id,
+            actor_id=str(current_user.user_id),
+            actor_role=current_user.role,
+            force_refresh=force_refresh,
+            correlation_id=correlation_id,
+        )
+    except NotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Finding not found", "error_code": "FINDING_NOT_FOUND"},
+        )
+    return RemediationResponse(
+        id=rec["id"],
+        finding_id=rec["finding_id"],
+        recommendation_text=rec["recommendation_text"],
+        implementation_guide=rec.get("implementation_guide") or "",
+        business_impact=rec.get("business_impact"),
+        confidence_score=rec.get("confidence_score"),
+        source=rec["source"],
+        created_at=rec["created_at"],
+    )
 
 
 @router.post(

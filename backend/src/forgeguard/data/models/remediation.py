@@ -95,6 +95,7 @@ class RemediationRecommendation(Base):
     )
     recommendation_text: Mapped[str] = mapped_column(Text, nullable=False)
     implementation_guide: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    business_impact: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     confidence_score: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(3, 2), nullable=True
     )

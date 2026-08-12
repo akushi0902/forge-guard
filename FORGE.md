@@ -490,3 +490,10 @@
 - **Files:** 7 (+828/-4)
 - **Duration:** 479ss
 - **Approach:** Added HealthScoreResult frozen dataclass to scoring.py. Created HealthScoreAggregator with DEFAULT_WEIGHTS (20% each for 5 dimensions) and proportional weight redistribution for null dimensions: active dimension effective weight = original_w[d] / sum(original_w for active dims) * 100; overall_score = sum(score[d] * original_w[d]) / total_active_weight. Returns None when all dimensions lack data. Created Alembic migration to add weights_used JSONB column and make overall_score nullable. Extended ScoreRepository with save_health_score (serialises HealthScoreResult), get_latest_health_score, and cursor-paginated list_scores_by_service. All arithmetic uses Decimal with ROUND_HALF_UP to 2dp. Verified: VARIED=(50+60+70+80+90)/5=70.00, SINGLE_DIM=72.50 with 100% effective weight, TWO_MISSING=(60+90+75)/3=75.00.
+
+## WO-058: User Story: WO-058 - AI Remediation Recommendation Generator with Confidence Scoring
+- **Status:** completed
+- **Commit:** `5c061e4`
+- **Files:** 9 (+1136/-10)
+- **Duration:** 611ss
+- **Approach:** Implemented the AI Remediation Recommendation Generator as a three-layer pipeline: (1) RecommendationGenerator builds an LLM prompt from finding context, calls AIEngineService (circuit-breaker + cache), parses the structured ## section response, and falls back to TemplateEngine/generic template on any failure — always returning a RecommendationResult without propagating errors. (2) RecommendationService.get_or_generate() provides idempotent access — returns cached recommendation if one exists and force_refresh=False, otherwise generates, persists via upsert() (with create() fallback), and emits a best-effort audit event. (3) GET /api/v1/findings/{finding_id}/remediation wires the service into the router with force_refresh query param and 404 handling for missing findings. Source values match the existing DB CHECK constraint: 'ai_generated' and 'template_fallback'.
