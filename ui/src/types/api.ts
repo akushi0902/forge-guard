@@ -131,3 +131,65 @@ export interface PaginatedResponse<T> {
   cursor: string | null;
   total_count: number;
 }
+
+// --------------------------------------------------------------------------
+// Platform Health (WO-081)
+// --------------------------------------------------------------------------
+
+/** Response from GET /health — basic liveness check. */
+export interface SystemHealthStatus {
+  status: string;
+  timestamp: string;
+  version: string;
+}
+
+/** Response from GET /ready — readiness check including database. */
+export interface ReadinessCheck {
+  status: string;
+  database: { status: string; latency_ms: number };
+  migration_version: string;
+}
+
+/** Response from GET /api/v1/platform/health — aggregated metrics summary. */
+export interface PlatformHealthSummary {
+  status: string;
+  timestamp: string;
+  /** % of requests with 2xx status (0–100). */
+  api_success_rate: number;
+  /** Assessment queue completion rate (0–100). */
+  assessment_completion_rate: number;
+  /** Audit log write success rate (0–100). */
+  audit_log_write_success_rate: number;
+  /** DB connection pool utilization as a fraction (0–1). */
+  db_connection_pool_utilization: number;
+  /** LLM circuit breaker state: 'closed' | 'open' | 'half-open'. */
+  llm_circuit_breaker_status: string;
+}
+
+/** One data point in the response time time-series chart. */
+export interface ResponseTimePoint {
+  /** ISO 8601 timestamp for this minute. */
+  minute: string;
+  /** P50 (median) response latency in milliseconds. */
+  p50_ms: number;
+}
+
+/** Response from GET /api/v1/platform/metrics — response time history. */
+export interface PlatformMetrics {
+  response_times: ResponseTimePoint[];
+}
+
+/** Single operational log entry shown in RecentLogsCard. */
+export interface PlatformLogEntry {
+  id: string;
+  timestamp: string;
+  level: 'info' | 'warn' | 'error';
+  service: string;
+  message: string;
+}
+
+/** Response from GET /api/v1/platform/logs — recent operational log entries. */
+export interface PlatformLogsResponse {
+  entries: PlatformLogEntry[];
+  total: number;
+}

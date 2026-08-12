@@ -392,3 +392,10 @@
 - **Files:** 9 (+829/-3)
 - **Duration:** 1248ss
 - **Approach:** Built three components: AssessmentRequestForm (Mantine useForm with service selector + 40-hex-char SHA validation), AssessmentProgress (TanStack Query polling via refetchInterval callback, elapsed time counter, timeout warning at 300s, fatal error after 3 consecutive failures tracked via error object reference changes), and ReleaseAssessmentRequestPage (form/progress state machine with URL param persistence). Added /releases/new route guarded by assessment:write permission, extended useRelease with UseReleaseOptions, and added PENDING_RELEASE_FIXTURE to MSW handlers.
+
+## WO-081: User Story: WO-081 - Operator Platform Health Monitoring Dashboard
+- **Status:** completed
+- **Commit:** `baaa117`
+- **Files:** 14 (+1429/-7)
+- **Duration:** 815ss
+- **Approach:** Replaced the placeholder PlatformHealthPage with a fully functional operator health monitoring dashboard. Built bottom-up: pure utility layer (healthThresholds.ts) → TanStack Query hooks (usePlatformHealth.ts) → five isolated sub-components (StatusCard, StatusGrid, ServiceHealthCard, ResponseTimeChartCard, RecentLogsCard) → composed page. The page polls five endpoints every 10 s using refetchInterval and placeholderData: (prev) => prev for smooth stale-data UX. Consecutive failure tracking via useRef triggers a stale-data warning banner after 3 failures. Overall status is aggregated via worstStatus() across all metric and service statuses. Backend db_connection_pool_utilization (fraction 0-1) is multiplied by 100 before threshold comparison. LLM circuit breaker status is mapped closed→up, half-open→degraded, open→down.
