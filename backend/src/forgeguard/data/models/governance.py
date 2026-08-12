@@ -21,6 +21,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
 
+from forgeguard.services.domain.severity import SeverityLevel
+
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -248,7 +250,7 @@ class PolicyRule(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     rule_type: Mapped[str] = mapped_column(String(100), nullable=False)
     threshold_config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    severity: Mapped[SeverityLevel] = mapped_column(String(20), nullable=False)
     weight: Mapped[Decimal] = mapped_column(
         Numeric(5, 2),
         nullable=False,

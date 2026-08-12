@@ -26,6 +26,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
 
+from forgeguard.services.domain.severity import SeverityLevel
+
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -287,7 +289,10 @@ class Finding(Base):
         ForeignKey("policy_rules.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    severity: Mapped[SeverityLevel] = mapped_column(String(20), nullable=False)
+    escalation_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     dimension: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(
         String(50), nullable=False, default="open", server_default="'open'"
