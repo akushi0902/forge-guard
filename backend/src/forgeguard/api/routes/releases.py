@@ -185,6 +185,50 @@ async def _run_assessment_pipeline(
             after_state={"status": "completed", "overall_score": score.overall_score},
         )
 
+        # Route the completed assessment to the appropriate reviewer.
+        # Non-fatal: routing failure is logged but never blocks the pipeline.
+        try:
+            from forgeguard.data.repositories.decision_assignment_repository import (  # noqa: PLC0415
+                DecisionAssignmentRepository,
+            )
+            from forgeguard.services.decision_engine.escalation_service import (  # noqa: PLC0415
+                EscalationResult,
+            )
+            from forgeguard.services.decision_engine.router import (  # noqa: PLC0415
+                DecisionRouter,
+            )
+            from forgeguard.services.decision_engine.engine import (  # noqa: PLC0415
+                DecisionOutcome,
+            )
+            from forgeguard.services.domain.severity import SeverityClassifier  # noqa: PLC0415
+
+            should_escalate = any(
+                SeverityClassifier.is_escalation_required(
+                    f.severity.value if hasattr(f.severity, "value") else str(f.severity),
+                    f.dimension.value if hasattr(f.dimension, "value") else str(f.dimension),
+                )
+                for f in findings
+            )
+            escalation_for_routing = EscalationResult(
+                should_escalate=should_escalate,
+                escalation_reasons=[],
+                original_recommendation=DecisionOutcome.BLOCK if should_escalate else DecisionOutcome.APPROVE,
+                final_recommendation=DecisionOutcome.BLOCK if should_escalate else DecisionOutcome.APPROVE,
+            )
+            router = DecisionRouter(DecisionAssignmentRepository(pool), audit_svc)
+            await router.route_decision(
+                assessment_id,
+                escalation_for_routing,
+                actor_id=actor_id,
+                actor_role=actor_role,
+            )
+        except Exception as _route_exc:
+            log.error(
+                "assessment_pipeline.routing_failed",
+                error=str(_route_exc),
+                message="Assessment is visible but no assignment was created — manual discovery required",
+            )
+
         log.info(
             "assessment_pipeline.completed",
             overall_score=score.overall_score,
@@ -675,6 +719,25 @@ async def decide_release(
     }
     persisted = await decision_repo.create(decision_data)
 
+    # 8b. Mark the pending decision assignment as completed (non-fatal).
+    try:
+        from forgeguard.data.repositories.decision_assignment_repository import (  # noqa: PLC0415
+            DecisionAssignmentRepository,
+        )
+
+        assignment_repo = DecisionAssignmentRepository(pool)
+        await assignment_repo.mark_completed(
+            id,
+            completed_by=actor_id,
+        )
+    except Exception as _assign_exc:
+        logger.error(
+            "releases.decide.assignment_completion_failed",
+            assessment_id=str(id),
+            decision_id=str(decision_id),
+            error=str(_assign_exc),
+        )
+
     # 9. Immutable audit record for the human decision.
     await audit_svc.log_event(
         actor_id=actor_id,
@@ -803,3 +866,110 @@ async def list_assessments(
         cursor=next_cursor,
         has_more=has_more,
     )
+
+
+# ---------------------------------------------------------------------------
+# Decision assignment pending queue endpoints (WO-053)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/pending",
+    summary="Get pending release decisions assigned to the requesting user's role",
+    dependencies=[Depends(require_any_permission([Permissions.RELEASE_APPROVE, Permissions.RELEASE_BLOCK]))],
+)
+async def get_pending_decisions(
+    request: Request,
+    pool: asyncpg.Pool = Depends(get_pool),
+    cursor: Optional[str] = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> dict:
+    """Return pending release assessment assignments for the requesting user's role.
+
+    Tech Leads see tech_lead assignments; Security Reviewers see security_reviewer
+    assignments.  Results are cursor-paginated, sorted by created_at descending.
+    """
+    from forgeguard.data.repositories.decision_assignment_repository import (  # noqa: PLC0415
+        DecisionAssignmentRepository,
+    )
+
+    actor_role: str = getattr(request.state, "user_role", "unknown") or "unknown"
+    assignment_repo = DecisionAssignmentRepository(pool)
+
+    rows = await assignment_repo.get_pending_by_role(
+        actor_role, cursor=cursor, limit=limit + 1
+    )
+
+    has_more = len(rows) > limit
+    page = rows[:limit]
+
+    next_cursor: Optional[str] = None
+    if has_more and page:
+        last = page[-1]
+        ts = last.get("created_at")
+        if ts is not None:
+            next_cursor = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+
+    return {
+        "role": actor_role,
+        "items": [_to_assignment_response(r) for r in page],
+        "cursor": next_cursor,
+        "has_more": has_more,
+    }
+
+
+@router.get(
+    "/admin/pending",
+    summary="Platform Admin: view all pending decision assignments across all roles",
+    dependencies=[Depends(require_permission(Permissions.POLICY_MANAGE))],
+)
+async def get_all_pending_decisions(
+    pool: asyncpg.Pool = Depends(get_pool),
+    cursor: Optional[str] = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> dict:
+    """Return all pending decision assignments across all reviewer roles.
+
+    Restricted to Platform Admin.  Results are cursor-paginated by created_at
+    descending.
+    """
+    from forgeguard.data.repositories.decision_assignment_repository import (  # noqa: PLC0415
+        DecisionAssignmentRepository,
+    )
+
+    assignment_repo = DecisionAssignmentRepository(pool)
+
+    rows = await assignment_repo.get_pending_all(cursor=cursor, limit=limit + 1)
+
+    has_more = len(rows) > limit
+    page = rows[:limit]
+
+    next_cursor: Optional[str] = None
+    if has_more and page:
+        last = page[-1]
+        ts = last.get("created_at")
+        if ts is not None:
+            next_cursor = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+
+    return {
+        "items": [_to_assignment_response(r) for r in page],
+        "cursor": next_cursor,
+        "has_more": has_more,
+    }
+
+
+def _to_assignment_response(row: dict[str, Any]) -> dict[str, Any]:
+    """Serialize a decision_assignment row for API responses."""
+    return {
+        "id": str(row["id"]),
+        "release_assessment_id": str(row["release_assessment_id"]),
+        "assigned_role": row["assigned_role"],
+        "assigned_at": row["assigned_at"].isoformat() if hasattr(row.get("assigned_at"), "isoformat") else str(row.get("assigned_at", "")),
+        "status": row["status"],
+        "completed_by": str(row["completed_by"]) if row.get("completed_by") else None,
+        "completed_at": row["completed_at"].isoformat() if row.get("completed_at") and hasattr(row["completed_at"], "isoformat") else None,
+        "service_id": str(row["service_id"]) if row.get("service_id") else None,
+        "commit_sha": row.get("commit_sha"),
+        "pr_reference": row.get("pr_reference"),
+        "created_at": row["created_at"].isoformat() if hasattr(row.get("created_at"), "isoformat") else str(row.get("created_at", "")),
+    }

@@ -63,10 +63,12 @@ from forgeguard.data.models.remediation import (  # noqa: E402, F401
 )
 from forgeguard.data.models.demo import DemoTransaction  # noqa: E402, F401
 from forgeguard.data.models.ai_response_cache import AIResponseCache  # noqa: E402, F401
+from forgeguard.data.models.decision_assignment import DecisionAssignment  # noqa: E402, F401
 
 __all__ = [
     "AIConversation",
     "AIResponseCache",
+    "DecisionAssignment",
     "Assessment",
     "DemoTransaction",
     "AssessmentScore",

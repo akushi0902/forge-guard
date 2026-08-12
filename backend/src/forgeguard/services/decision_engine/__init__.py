@@ -1,4 +1,4 @@
-"""Decision Engine package — score merging, threshold management, and escalation (WO-049, WO-050)."""
+"""Decision Engine package — score merging, threshold management, escalation, and routing."""
 
 from forgeguard.services.decision_engine.engine import (
     DecisionEngine,
@@ -11,6 +11,7 @@ from forgeguard.services.decision_engine.escalation_service import (
     SecurityEscalationService,
     SYSTEM_ACTOR_UUID,
 )
+from forgeguard.services.decision_engine.router import DecisionRouter
 from forgeguard.services.decision_engine.threshold_service import DecisionThresholdService
 
 __all__ = [
@@ -18,6 +19,7 @@ __all__ = [
     "DecisionOutcome",
     "DecisionResult",
     "DEFAULT_THRESHOLDS",
+    "DecisionRouter",
     "DecisionThresholdService",
     "EscalationResult",
     "SecurityEscalationService",

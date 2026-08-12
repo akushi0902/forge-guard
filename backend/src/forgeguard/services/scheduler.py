@@ -135,6 +135,18 @@ class SchedulerService:
             misfire_grace_time=3600,
         )
 
+        # Every 15 minutes — mark decision assignments older than 24h as expired.
+        from apscheduler.triggers.interval import IntervalTrigger  # noqa: PLC0415
+
+        scheduler.add_job(
+            _run_decision_assignment_expiry,
+            IntervalTrigger(minutes=15, timezone="UTC"),
+            id="decision_assignment_expiry",
+            name="Decision Assignment Expiry",
+            replace_existing=True,
+            misfire_grace_time=900,
+        )
+
         scheduler.start()
         self._scheduler = scheduler
         logger.info("scheduler.started", job_count=len(scheduler.get_jobs()))
@@ -240,6 +252,38 @@ async def _run_exceptions_purge(settings: "Settings") -> None:
         await svc.purge_expired_exceptions()
     except Exception as exc:
         logger.error("scheduler.job.failed", job="purge_exceptions", error=str(exc))
+
+
+async def _run_decision_assignment_expiry() -> None:
+    """Every-15-minute job: mark pending decision assignments older than 24h as expired (WO-053)."""
+    try:
+        from forgeguard.data.database import get_pool  # noqa: PLC0415
+        from forgeguard.data.repositories.decision_assignment_repository import (  # noqa: PLC0415
+            DecisionAssignmentRepository,
+        )
+
+        pool = await get_pool()
+        repo = DecisionAssignmentRepository(pool)
+        expired = await repo.mark_expired_batch(older_than_hours=24)
+        for row in expired:
+            logger.warning(
+                "decision_assignment.expired",
+                assignment_id=str(row.get("id", "")),
+                assessment_id=str(row.get("release_assessment_id", "")),
+                assigned_role=row.get("assigned_role", ""),
+                assigned_at=str(row.get("assigned_at", "")),
+            )
+        if expired:
+            logger.warning(
+                "decision_assignment_expiry.batch_completed",
+                expired_count=len(expired),
+            )
+    except Exception as exc:
+        logger.error(
+            "scheduler.job.failed",
+            job="decision_assignment_expiry",
+            error=str(exc),
+        )
 
 
 async def _run_exception_expiry() -> None:
