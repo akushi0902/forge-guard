@@ -23,14 +23,17 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from fastapi.responses import JSONResponse
 
 from forgeguard.api.dependencies.audit import get_audit_service
-from forgeguard.api.dependencies.rbac import require_permission
+from forgeguard.api.dependencies.rbac import require_any_permission, require_permission
 from forgeguard.api.schemas.releases import (
     ContributingFactorResponse,
+    EscalationReasonResponse,
     FindingResponse,
     PaginatedAssessmentResponse,
     ReleaseAssessmentDetailResponse,
     ReleaseAssessmentRequest,
     ReleaseAssessmentResponse,
+    ReleaseDecisionRequest,
+    ReleaseDecisionResponse,
     RiskScoreResponse,
     decode_cursor,
     encode_cursor,
@@ -42,8 +45,15 @@ from forgeguard.core.dependencies import (
     get_release_assessment_repo,
     get_service_repository,
 )
-from forgeguard.core.permissions import Permissions
-from forgeguard.services.audit import AuditService
+from forgeguard.core.permissions import Permissions, UserRole
+from forgeguard.data.repositories.decisions import DecisionRepository
+from forgeguard.services.audit import AuditService, SYSTEM_ACTOR_ROLE
+from forgeguard.services.decision_engine import (
+    DecisionEngine,
+    DecisionOutcome,
+    SecurityEscalationService,
+    SYSTEM_ACTOR_UUID,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -457,6 +467,181 @@ async def get_assessment(
         risk_score=risk_score,
         findings=findings,
         change_analysis_summary=summary,
+    )
+
+
+@router.post(
+    "/{id}/decide",
+    response_model=ReleaseDecisionResponse,
+    status_code=201,
+    summary="Compute and record a release decision for an assessment",
+    dependencies=[Depends(require_any_permission([Permissions.RELEASE_APPROVE, Permissions.RELEASE_BLOCK]))],
+)
+async def decide_release(
+    id: uuid.UUID,
+    body: ReleaseDecisionRequest,
+    request: Request,
+    pool: asyncpg.Pool = Depends(get_pool),
+    audit_svc: AuditService = Depends(get_audit_service),
+) -> ReleaseDecisionResponse:
+    """Merge Health Score and Risk Score into a release decision.
+
+    Runs the threshold engine then the escalation check.  If any finding
+    in the assessment has ``severity=CRITICAL`` AND ``dimension=security``
+    the recommendation is auto-overridden to BLOCK and ``was_escalated``
+    is set to ``true`` on the persisted record.
+
+    RBAC guard: if a previous decision for this assessment already has
+    ``was_escalated=true``, only a Security Reviewer may call this endpoint
+    to record an override.  All other roles receive 403.
+    """
+    from forgeguard.data.repositories.audit_logs import AuditLogRepository  # noqa: PLC0415
+    from forgeguard.data.repositories.release_assessment_repository import (  # noqa: PLC0415
+        ReleaseAssessmentRepository,
+    )
+
+    actor_id: Optional[str] = getattr(request.state, "user_id", None)
+    if actor_id is not None:
+        actor_id = str(actor_id)
+    actor_role: str = getattr(request.state, "user_role", "unknown") or "unknown"
+
+    assessment_repo = ReleaseAssessmentRepository(pool)
+    decision_repo = DecisionRepository(pool)
+
+    assessment = await assessment_repo.get_by_id(id)
+    if assessment is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error_code": "not_found", "message": f"Assessment {id} not found"},
+        )
+
+    # RBAC guard: if an escalated decision exists, only security_reviewer may proceed.
+    existing_decisions = await decision_repo.find_by_release_assessment(id)
+    has_escalated_decision = any(d.get("was_escalated") for d in existing_decisions)
+    if has_escalated_decision and actor_role != UserRole.security_reviewer.value:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "security_reviewer_required",
+                "message": (
+                    "This assessment has been escalated due to critical security findings. "
+                    "Only a Security Reviewer may record an override decision."
+                ),
+            },
+        )
+
+    # Extract findings from change_analysis JSONB for escalation scan.
+    findings: list[Any] = _build_findings(assessment.get("change_analysis"))
+
+    # Compute threshold-based decision.
+    from decimal import Decimal  # noqa: PLC0415
+    health_d = Decimal(str(body.health_score))
+    risk_d = Decimal(str(body.risk_score))
+    threshold_decision = DecisionEngine.merge_scores(health_d, risk_d)
+
+    # Run escalation check (fail-closed).
+    escalation = SecurityEscalationService.check_escalation(findings, threshold_decision)
+
+    # Build rationale string.
+    rationale_parts: list[str] = [
+        f"threshold_decision={threshold_decision.decision.value}",
+        f"health_score={body.health_score}",
+        f"risk_score={body.risk_score}",
+    ]
+    if escalation.should_escalate:
+        finding_refs = "; ".join(
+            f"{r['finding_id']}:{r['title']}" for r in escalation.escalation_reasons
+        )
+        rationale_parts.append(
+            f"auto_escalated=true; critical_security_findings=[{finding_refs}]"
+        )
+    if body.comment:
+        rationale_parts.append(f"comment={body.comment}")
+    rationale = " | ".join(rationale_parts)
+
+    # Persist the decision record.
+    decision_id = uuid.uuid4()
+    decision_data: dict[str, Any] = {
+        "id": decision_id,
+        "release_assessment_id": id,
+        "health_score_at_decision": health_d,
+        "risk_score_at_decision": risk_d,
+        "decision": escalation.final_recommendation.value,
+        "decided_by_role": actor_role,
+        "decided_by": uuid.UUID(actor_id) if actor_id else None,
+        "rationale": rationale,
+        "comment": body.comment,
+        "was_escalated": escalation.should_escalate,
+    }
+    persisted = await decision_repo.create(decision_data)
+
+    # Audit record for the decision.
+    await audit_svc.log_event(
+        actor_id=actor_id,
+        actor_role=actor_role,
+        action="release_decision.created",
+        resource_type="release_decision",
+        resource_id=decision_id,
+        after_state={
+            "decision": escalation.final_recommendation.value,
+            "was_escalated": escalation.should_escalate,
+            "health_score": float(health_d),
+            "risk_score": float(risk_d),
+        },
+    )
+
+    # Separate audit record for the escalation event (actor=SYSTEM).
+    if escalation.should_escalate:
+        audit_repo = AuditLogRepository(pool)
+        system_audit_svc = AuditService(audit_repo)
+        try:
+            await system_audit_svc.log_event(
+                actor_id=SYSTEM_ACTOR_UUID,
+                actor_role=SYSTEM_ACTOR_ROLE,
+                action="security_auto_escalation",
+                resource_type="release_decision",
+                resource_id=decision_id,
+                before_state={
+                    "original_recommendation": escalation.original_recommendation.value,
+                },
+                after_state={
+                    "final_recommendation": DecisionOutcome.BLOCK.value,
+                    "escalation_reasons": escalation.escalation_reasons,
+                    "assessment_id": str(id),
+                },
+            )
+        except Exception:
+            logger.error(
+                "releases.decide.escalation_audit_failed",
+                decision_id=str(decision_id),
+                assessment_id=str(id),
+            )
+
+    logger.info(
+        "releases.decide.completed",
+        assessment_id=str(id),
+        decision=escalation.final_recommendation.value,
+        was_escalated=escalation.should_escalate,
+        actor_role=actor_role,
+    )
+
+    created_at = persisted.get("created_at")
+
+    return ReleaseDecisionResponse(
+        id=persisted["id"],
+        release_assessment_id=id,
+        decision=escalation.final_recommendation.value,
+        was_escalated=escalation.should_escalate,
+        escalation_reasons=[
+            EscalationReasonResponse(finding_id=r["finding_id"], title=r["title"])
+            for r in escalation.escalation_reasons
+        ],
+        original_recommendation=escalation.original_recommendation.value if escalation.should_escalate else None,
+        health_score=float(health_d),
+        risk_score=float(risk_d),
+        rationale=rationale,
+        decided_by_role=actor_role,
+        created_at=created_at or datetime.now(timezone.utc),
     )
 
 

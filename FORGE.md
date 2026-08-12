@@ -525,3 +525,10 @@
 - **Files:** 3 (+1368/-0)
 - **Duration:** 627ss
 - **Approach:** Built tests bottom-up across three files: (1) test_rule_evaluation.py covers all evaluator types (threshold_gte/lte/eq, regex_match/no_match, unknown type) against the RuleEvaluationEngine.evaluate_rules() async interface; (2) test_dimension_scoring.py covers DimensionScoreCalculator with equal/custom weights, all 8 parametrized boundary values (0,1,49,50,69,70,99,100), edge cases (zero rules, zero/negative weights, INCONCLUSIVE exclusion, suppressed findings); (3) test_health_score_calculation.py covers HealthScoreAggregator with all five dims, custom weights, missing dimensions, the full pipeline calculator→aggregator, suppressed/expired exceptions, AI engine zero-call assertions, and 5 determinism tests. All tests use dependency injection, no DB/network.
+
+## WO-050: User Story: WO-050 - Critical Security Finding Auto-Escalation to Security Reviewer
+- **Status:** completed
+- **Commit:** `c8f0378`
+- **Files:** 7 (+1185/-4)
+- **Duration:** 591ss
+- **Approach:** Implemented SecurityEscalationService as a pure stateless function that scans findings for severity=CRITICAL AND dimension=security using the existing SeverityClassifier.is_escalation_required(). EscalationResult is a frozen dataclass holding should_escalate, escalation_reasons (list of {finding_id, title} dicts), original_recommendation, and final_recommendation. Fail-closed: any exception during scanning returns BLOCK with should_escalate=True. Integrated into a new POST /api/v1/releases/{id}/decide endpoint in releases.py that: loads the assessment, checks existing escalated decisions for the RBAC guard (security_reviewer required), extracts findings from change_analysis JSONB, runs DecisionEngine.merge_scores() then SecurityEscalationService.check_escalation(), persists the release_decisions record with was_escalated set, writes two audit records (human actor for the decision, SYSTEM actor for the escalation event), and returns the full decision response. Added RBAC guard: if any prior decision on the assessment has was_escalated=true, only security_reviewer role can proceed (HTTP 403 otherwise).

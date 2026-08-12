@@ -83,6 +83,40 @@ class PaginatedAssessmentResponse(BaseModel):
     has_more: bool
 
 
+# ---------------------------------------------------------------------------
+# Release decision schemas (WO-050)
+# ---------------------------------------------------------------------------
+
+
+class ReleaseDecisionRequest(BaseModel):
+    """Request body for POST /api/v1/releases/{id}/decide."""
+
+    health_score: float = Field(ge=0.0, le=100.0)
+    risk_score: float = Field(ge=0.0, le=100.0)
+    comment: Optional[str] = Field(default=None, max_length=2000)
+
+
+class EscalationReasonResponse(BaseModel):
+    finding_id: str
+    title: str
+
+
+class ReleaseDecisionResponse(BaseModel):
+    """Response body for POST /api/v1/releases/{id}/decide."""
+
+    id: uuid.UUID
+    release_assessment_id: uuid.UUID
+    decision: str
+    was_escalated: bool
+    escalation_reasons: list[EscalationReasonResponse]
+    original_recommendation: Optional[str] = None
+    health_score: float
+    risk_score: float
+    rationale: Optional[str] = None
+    decided_by_role: Optional[str] = None
+    created_at: datetime
+
+
 def encode_cursor(created_at: datetime, record_id: uuid.UUID) -> str:
     """Encode a (created_at, id) pair as an opaque base64 cursor string."""
     raw = f"{created_at.isoformat()}|{record_id}"
