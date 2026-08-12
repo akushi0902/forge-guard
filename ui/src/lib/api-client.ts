@@ -7,6 +7,7 @@
 
 import { getCsrfToken } from '@/stores/auth-store';
 import { ApiError, NetworkError, ParseError } from '@/types/errors';
+import { showPermissionDeniedNotification } from '@/lib/permission-interceptor';
 
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -89,18 +90,29 @@ export async function apiClient<T>(
   }
 
   if (!response.ok) {
-    let errorBody: { detail?: string; status_code?: number; error_code?: string } = {};
+    let rawBody: unknown = {};
     try {
-      errorBody = (await response.json()) as typeof errorBody;
+      rawBody = await response.json();
     } catch {
       // Non-JSON error body — use defaults
     }
 
+    // Intercept 403 Permission Denied: show a structured notification before
+    // throwing so all callers benefit without per-component error handling.
+    if (response.status === 403) {
+      showPermissionDeniedNotification(rawBody);
+    }
+
+    const errorBody = rawBody as {
+      detail?: string;
+      status_code?: number;
+      error_code?: string;
+    };
     const detail = errorBody.detail ?? response.statusText;
     const errorCode = errorBody.error_code ?? String(response.status);
 
     if (import.meta.env.DEV) {
-      console.error('[apiClient] error', { url, method, status: response.status, errorBody });
+      console.error('[apiClient] error', { url, method, status: response.status, rawBody });
     }
 
     throw new ApiError(response.status, detail, errorCode);

@@ -1,0 +1,7 @@
+{
+  "error": "forbidden",
+  "permission": "policy.manage",
+  "required_role": "Platform Admin",
+  "message": "This action requires the 'policy.manage' permission assigned to the Platform Admin role.",
+  "action": "Contact your Platform Admin for access."
+}

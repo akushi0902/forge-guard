@@ -1,0 +1,7 @@
+{
+  "error": "forbidden",
+  "permission": "exception.approve",
+  "required_role": ["Engineering Manager", "Platform Admin"],
+  "message": "This action requires the 'exception.approve' permission assigned to the Engineering Manager or Platform Admin role.",
+  "action": "Contact your Platform Admin for access."
+}

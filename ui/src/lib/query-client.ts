@@ -8,7 +8,7 @@ import { QueryClient } from '@tanstack/react-query';
 
 import { ApiError, NetworkError } from '@/types/errors';
 
-function getErrorMessage(error: unknown): { title: string; message: string; color: string } {
+function getErrorMessage(error: unknown): { title: string; message: string; color: string } | null {
   if (error instanceof ApiError) {
     switch (error.status) {
       case 400:
@@ -16,11 +16,10 @@ function getErrorMessage(error: unknown): { title: string; message: string; colo
       case 401:
         return { title: 'Unauthorised', message: 'Please log in again.', color: 'red' };
       case 403:
-        return {
-          title: 'Permission Denied',
-          message: 'You do not have permission to perform this action.',
-          color: 'yellow',
-        };
+        // 403 responses are handled by the permission interceptor in api-client.ts
+        // which shows a rich notification with the specific permission and role.
+        // Return null to skip the generic fallback notification here.
+        return null;
       case 404:
         return {
           title: 'Not Found',
@@ -71,7 +70,9 @@ export const queryClient = new QueryClient({
     mutations: {
       retry: 0,
       onError: (error) => {
-        const { title, message, color } = getErrorMessage(error);
+        const result = getErrorMessage(error);
+        if (result === null) return; // handled by permission interceptor
+        const { title, message, color } = result;
         notifications.show({ title, message, color, autoClose: 5000 });
       },
     },

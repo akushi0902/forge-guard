@@ -1,0 +1,7 @@
+{
+  "error": "forbidden",
+  "permission": "release.approve",
+  "required_role": ["Tech Lead", "Platform Admin"],
+  "message": "This action requires the 'release.approve' permission assigned to the Tech Lead or Platform Admin role.",
+  "action": "Contact your Platform Admin for access."
+}
