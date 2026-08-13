@@ -74,3 +74,79 @@ export const HIGH_FINDINGS_PAGINATED: PaginatedResponse<Finding> = {
   cursor: null,
   total_count: 1,
 };
+
+export const MEDIUM_FINDINGS_PAGINATED: PaginatedResponse<Finding> = {
+  items: [MEDIUM_FINDING],
+  cursor: null,
+  total_count: 1,
+};
+
+export const LOW_FINDINGS_PAGINATED: PaginatedResponse<Finding> = {
+  items: [LOW_FINDING],
+  cursor: null,
+  total_count: 1,
+};
+
+// ---------------------------------------------------------------------------
+// Paginated multi-page fixtures for pagination tests
+// ---------------------------------------------------------------------------
+
+/** Page 1 of 2: returns a cursor so the Next button is enabled. */
+export const PAGE_1_FINDINGS: Finding[] = [
+  {
+    id: 'fnd-p1-001',
+    service_id: 'svc-001',
+    title: 'SQL injection risk in query builder',
+    description: 'User input not sanitised before passing to SQL query.',
+    severity: FindingSeverity.Critical,
+    dimension: 'security',
+    status: FindingStatus.Open,
+    created_at: '2026-08-12T07:00:00Z',
+  },
+  {
+    id: 'fnd-p1-002',
+    service_id: 'svc-001',
+    title: 'Missing health check endpoint',
+    description: '/health endpoint not implemented.',
+    severity: FindingSeverity.High,
+    dimension: 'operations_readiness',
+    status: FindingStatus.Open,
+    created_at: '2026-08-12T06:00:00Z',
+  },
+];
+
+export const PAGE_1_FINDINGS_PAGINATED: PaginatedResponse<Finding> = {
+  items: PAGE_1_FINDINGS,
+  cursor: 'cursor-page-2',
+  total_count: 4,
+};
+
+/** Page 2 of 2: no cursor returned, so Next button is disabled. */
+export const PAGE_2_FINDINGS: Finding[] = [
+  {
+    id: 'fnd-p2-001',
+    service_id: 'svc-001',
+    title: 'Outdated base image in Dockerfile',
+    description: 'Base image is 18 months old.',
+    severity: FindingSeverity.Medium,
+    dimension: 'operations_readiness',
+    status: FindingStatus.Open,
+    created_at: '2026-08-11T05:00:00Z',
+  },
+  {
+    id: 'fnd-p2-002',
+    service_id: 'svc-001',
+    title: 'No README contributing guide',
+    description: 'CONTRIBUTING.md not present.',
+    severity: FindingSeverity.Low,
+    dimension: 'documentation',
+    status: FindingStatus.Open,
+    created_at: '2026-08-11T04:00:00Z',
+  },
+];
+
+export const PAGE_2_FINDINGS_PAGINATED: PaginatedResponse<Finding> = {
+  items: PAGE_2_FINDINGS,
+  cursor: null,
+  total_count: 4,
+};
