@@ -47,6 +47,9 @@ from forgeguard.core.dependencies import (
     get_service_repository,
 )
 from forgeguard.core.permissions import Permissions, UserRole
+from forgeguard.data.repositories.decision_assignment_repository import (
+    DecisionAssignmentRepository,
+)
 from forgeguard.data.repositories.decisions import DecisionRepository
 from forgeguard.services.audit import AuditService, SYSTEM_ACTOR_ROLE
 from forgeguard.services.decision_engine import (
@@ -59,6 +62,7 @@ from forgeguard.services.decision_engine import (
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/releases", tags=["releases"])
+admin_releases_router = APIRouter(prefix="/api/v1/admin/releases", tags=["admin", "releases"])
 
 # Maximum seconds the assessment pipeline is allowed to run.
 _PIPELINE_TIMEOUT_SECONDS = 300
@@ -188,9 +192,6 @@ async def _run_assessment_pipeline(
         # Route the completed assessment to the appropriate reviewer.
         # Non-fatal: routing failure is logged but never blocks the pipeline.
         try:
-            from forgeguard.data.repositories.decision_assignment_repository import (  # noqa: PLC0415
-                DecisionAssignmentRepository,
-            )
             from forgeguard.services.decision_engine.escalation_service import (  # noqa: PLC0415
                 EscalationResult,
             )
@@ -474,6 +475,93 @@ async def request_assessment(
     return response
 
 
+# ---------------------------------------------------------------------------
+# Decision assignment pending queue endpoints (WO-053)
+#
+# IMPORTANT: These static-path routes MUST be registered before the
+# parametric /{id} route below.  FastAPI evaluates routes in definition
+# order; registering /pending after /{id} would cause FastAPI to match
+# GET /api/v1/releases/pending as /{id} with id="pending", returning 422.
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/pending",
+    summary="Get pending release decisions assigned to the requesting user's role",
+    dependencies=[Depends(require_any_permission([Permissions.RELEASE_APPROVE, Permissions.RELEASE_BLOCK]))],
+)
+async def get_pending_decisions(
+    request: Request,
+    pool: asyncpg.Pool = Depends(get_pool),
+    cursor: Optional[str] = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> dict:
+    """Return pending release assessment assignments for the requesting user's role.
+
+    Tech Leads see tech_lead assignments; Security Reviewers see security_reviewer
+    assignments.  Results are cursor-paginated, sorted by created_at descending.
+    """
+    actor_role: str = getattr(request.state, "user_role", "unknown") or "unknown"
+    assignment_repo = DecisionAssignmentRepository(pool)
+
+    rows = await assignment_repo.get_pending_by_role(
+        actor_role, cursor=cursor, limit=limit + 1
+    )
+
+    has_more = len(rows) > limit
+    page = rows[:limit]
+
+    next_cursor: Optional[str] = None
+    if has_more and page:
+        last = page[-1]
+        ts = last.get("created_at")
+        if ts is not None:
+            next_cursor = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+
+    return {
+        "role": actor_role,
+        "items": [_to_assignment_response(r) for r in page],
+        "cursor": next_cursor,
+        "has_more": has_more,
+    }
+
+
+@admin_releases_router.get(
+    "/pending",
+    summary="Platform Admin: view all pending decision assignments across all roles",
+    dependencies=[Depends(require_permission(Permissions.POLICY_MANAGE))],
+)
+async def get_all_pending_decisions(
+    pool: asyncpg.Pool = Depends(get_pool),
+    cursor: Optional[str] = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> dict:
+    """Return all pending decision assignments across all reviewer roles.
+
+    Restricted to Platform Admin.  Results are cursor-paginated by created_at
+    descending.  URL: GET /api/v1/admin/releases/pending
+    """
+    assignment_repo = DecisionAssignmentRepository(pool)
+
+    rows = await assignment_repo.get_pending_all(cursor=cursor, limit=limit + 1)
+
+    has_more = len(rows) > limit
+    page = rows[:limit]
+
+    next_cursor: Optional[str] = None
+    if has_more and page:
+        last = page[-1]
+        ts = last.get("created_at")
+        if ts is not None:
+            next_cursor = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+
+    return {
+        "items": [_to_assignment_response(r) for r in page],
+        "cursor": next_cursor,
+        "has_more": has_more,
+    }
+
+
 @router.get(
     "/{id}",
     response_model=ReleaseAssessmentDetailResponse,
@@ -721,10 +809,6 @@ async def decide_release(
 
     # 8b. Mark the pending decision assignment as completed (non-fatal).
     try:
-        from forgeguard.data.repositories.decision_assignment_repository import (  # noqa: PLC0415
-            DecisionAssignmentRepository,
-        )
-
         assignment_repo = DecisionAssignmentRepository(pool)
         await assignment_repo.mark_completed(
             id,
@@ -866,96 +950,6 @@ async def list_assessments(
         cursor=next_cursor,
         has_more=has_more,
     )
-
-
-# ---------------------------------------------------------------------------
-# Decision assignment pending queue endpoints (WO-053)
-# ---------------------------------------------------------------------------
-
-
-@router.get(
-    "/pending",
-    summary="Get pending release decisions assigned to the requesting user's role",
-    dependencies=[Depends(require_any_permission([Permissions.RELEASE_APPROVE, Permissions.RELEASE_BLOCK]))],
-)
-async def get_pending_decisions(
-    request: Request,
-    pool: asyncpg.Pool = Depends(get_pool),
-    cursor: Optional[str] = Query(default=None),
-    limit: int = Query(default=20, ge=1, le=100),
-) -> dict:
-    """Return pending release assessment assignments for the requesting user's role.
-
-    Tech Leads see tech_lead assignments; Security Reviewers see security_reviewer
-    assignments.  Results are cursor-paginated, sorted by created_at descending.
-    """
-    from forgeguard.data.repositories.decision_assignment_repository import (  # noqa: PLC0415
-        DecisionAssignmentRepository,
-    )
-
-    actor_role: str = getattr(request.state, "user_role", "unknown") or "unknown"
-    assignment_repo = DecisionAssignmentRepository(pool)
-
-    rows = await assignment_repo.get_pending_by_role(
-        actor_role, cursor=cursor, limit=limit + 1
-    )
-
-    has_more = len(rows) > limit
-    page = rows[:limit]
-
-    next_cursor: Optional[str] = None
-    if has_more and page:
-        last = page[-1]
-        ts = last.get("created_at")
-        if ts is not None:
-            next_cursor = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
-
-    return {
-        "role": actor_role,
-        "items": [_to_assignment_response(r) for r in page],
-        "cursor": next_cursor,
-        "has_more": has_more,
-    }
-
-
-@router.get(
-    "/admin/pending",
-    summary="Platform Admin: view all pending decision assignments across all roles",
-    dependencies=[Depends(require_permission(Permissions.POLICY_MANAGE))],
-)
-async def get_all_pending_decisions(
-    pool: asyncpg.Pool = Depends(get_pool),
-    cursor: Optional[str] = Query(default=None),
-    limit: int = Query(default=20, ge=1, le=100),
-) -> dict:
-    """Return all pending decision assignments across all reviewer roles.
-
-    Restricted to Platform Admin.  Results are cursor-paginated by created_at
-    descending.
-    """
-    from forgeguard.data.repositories.decision_assignment_repository import (  # noqa: PLC0415
-        DecisionAssignmentRepository,
-    )
-
-    assignment_repo = DecisionAssignmentRepository(pool)
-
-    rows = await assignment_repo.get_pending_all(cursor=cursor, limit=limit + 1)
-
-    has_more = len(rows) > limit
-    page = rows[:limit]
-
-    next_cursor: Optional[str] = None
-    if has_more and page:
-        last = page[-1]
-        ts = last.get("created_at")
-        if ts is not None:
-            next_cursor = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
-
-    return {
-        "items": [_to_assignment_response(r) for r in page],
-        "cursor": next_cursor,
-        "has_more": has_more,
-    }
 
 
 def _to_assignment_response(row: dict[str, Any]) -> dict[str, Any]:

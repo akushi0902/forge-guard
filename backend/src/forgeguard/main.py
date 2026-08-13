@@ -37,7 +37,7 @@ from forgeguard.api.routes.data_subject import router as data_subject_router
 from forgeguard.api.routes.demo import router as demo_router
 from forgeguard.api.routes.platform import router as platform_router
 from forgeguard.api.routes.policies import router as policies_router
-from forgeguard.api.routes.releases import router as releases_router
+from forgeguard.api.routes.releases import admin_releases_router, router as releases_router
 from forgeguard.api.routes.remediation import router as remediation_router
 from forgeguard.api.routes.agent import router as agent_router
 from forgeguard.api.routes.reports import router as reports_router
@@ -236,6 +236,9 @@ def create_app() -> FastAPI:
 
     # Release Assessment endpoints (WO-048).
     app.include_router(releases_router)
+
+    # Admin pending-queue endpoint for all roles (WO-053): GET /api/v1/admin/releases/pending.
+    app.include_router(admin_releases_router)
 
     # Policy Guardian CRUD endpoints (WO-035).
     app.include_router(policies_router)
