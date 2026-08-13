@@ -23,6 +23,7 @@ import { server } from '@/test/mocks/server';
 import {
   PENDING_DECISION_VIEW,
   APPROVED_DECISION_VIEW,
+  CONDITIONAL_APPROVE_DECISION_VIEW,
   BLOCKED_DECISION_VIEW,
   ESCALATED_DECISION_VIEW,
   PROCESSING_DECISION_VIEW,
@@ -479,6 +480,92 @@ describe('ReleaseDecisionReviewPage — integration: approve flow', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('page-decided')).toBeInTheDocument();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC-2 (WO-101): CONDITIONAL_APPROVE state — DecisionBanner
+// ---------------------------------------------------------------------------
+
+describe('ReleaseDecisionReviewPage — decided state (CONDITIONAL_APPROVE)', () => {
+  it('renders DecisionBanner for CONDITIONAL_APPROVE assessment', async () => {
+    server.use(
+      http.get('/api/v1/releases/:id/decision', () =>
+        HttpResponse.json(CONDITIONAL_APPROVE_DECISION_VIEW),
+      ),
+    );
+    setUser(['service.view']);
+    render(<ReleaseDecisionReviewPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('page-decided')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('decision-banner')).toBeInTheDocument();
+  });
+
+  it('shows CONDITIONAL_APPROVE banner text', async () => {
+    server.use(
+      http.get('/api/v1/releases/:id/decision', () =>
+        HttpResponse.json(CONDITIONAL_APPROVE_DECISION_VIEW),
+      ),
+    );
+    setUser(['service.view']);
+    render(<ReleaseDecisionReviewPage />);
+    await waitFor(() => {
+      expect(screen.getByText(/conditionally approved/i)).toBeInTheDocument();
+    });
+  });
+
+  it('does not show approve/block action buttons for decided assessment', async () => {
+    server.use(
+      http.get('/api/v1/releases/:id/decision', () =>
+        HttpResponse.json(CONDITIONAL_APPROVE_DECISION_VIEW),
+      ),
+    );
+    setUser(['service.view', 'release.approve', 'release.block']);
+    render(<ReleaseDecisionReviewPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('page-decided')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('approve-btn')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('block-btn')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC-6 (WO-101): Accessibility — interactive elements have accessible names
+// ---------------------------------------------------------------------------
+
+describe('ReleaseDecisionReviewPage — accessibility', () => {
+  it('approve and block buttons have accessible names', async () => {
+    server.use(
+      http.get('/api/v1/releases/:id/decision', () =>
+        HttpResponse.json(PENDING_DECISION_VIEW),
+      ),
+    );
+    setUser(['service.view', 'release.approve', 'release.block']);
+    render(<ReleaseDecisionReviewPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('approve-btn')).toBeInTheDocument();
+    });
+    const approveBtn = screen.getByTestId('approve-btn');
+    const blockBtn = screen.getByTestId('block-btn');
+    // Buttons must have a non-empty accessible name (text content or aria-label)
+    expect(approveBtn).toHaveAccessibleName();
+    expect(blockBtn).toHaveAccessibleName();
+  });
+
+  it('retry button has an accessible name when in error state', async () => {
+    server.use(
+      http.get('/api/v1/releases/:id/decision', () =>
+        HttpResponse.json({ detail: 'Server error' }, { status: 500 }),
+      ),
+    );
+    setUser(['service.view']);
+    render(<ReleaseDecisionReviewPage />);
+    await waitFor(() => {
+      const retryBtn = screen.getByRole('button', { name: /retry/i });
+      expect(retryBtn).toBeInTheDocument();
     });
   });
 });
