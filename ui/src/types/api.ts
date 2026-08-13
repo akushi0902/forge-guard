@@ -260,6 +260,70 @@ export interface PlatformLogsResponse {
 }
 
 // --------------------------------------------------------------------------
+// Release Decision Review (WO-075)
+// --------------------------------------------------------------------------
+
+/** A single finding embedded in a release assessment's change_analysis. */
+export interface ReleaseAssessmentFinding {
+  id: string;
+  title: string;
+  severity: string;
+  dimension: string;
+  explanation: string | null;
+  business_impact: string | null;
+  remediation_steps: string[];
+  confidence_score: number;
+  source: string | null;
+}
+
+/** A persisted human decision record returned by the decision view endpoint. */
+export interface ReleaseDecisionRecord {
+  id: string;
+  decided_by: string | null;
+  decided_by_role: string | null;
+  decision: string;
+  rationale: string | null;
+  comment: string | null;
+  was_escalated: boolean;
+  created_at: string;
+}
+
+/** Full combined decision view from GET /api/v1/releases/{id}/decision. */
+export interface CombinedDecisionView {
+  assessment: {
+    id: string;
+    service_id: string;
+    commit_sha: string | null;
+    pr_reference: string | null;
+    status: string;
+    created_at: string;
+    completed_at: string | null;
+  };
+  system_recommendation: {
+    decision: string;
+  };
+  health_score: {
+    overall: number;
+    dimensions: { name: string; score: number; rule_count: number; pass_count: number }[];
+  } | null;
+  risk_score: {
+    overall: number;
+    contributing_factors: { factor: string; impact: string; weight: number }[];
+  } | null;
+  findings_summary: {
+    total: number;
+    by_severity: Record<string, { count: number; items: ReleaseAssessmentFinding[] }>;
+  };
+  escalation: {
+    is_escalated: boolean;
+    reasons: { finding_id: string; title: string }[] | null;
+  };
+  decision_record: ReleaseDecisionRecord | null;
+  scoring_incomplete: boolean;
+  scoring_incomplete_reason: string | null;
+}
+
+// --------------------------------------------------------------------------
 // Engineering Manager Dashboard (WO-078)
 // --------------------------------------------------------------------------
 
