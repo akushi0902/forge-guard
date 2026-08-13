@@ -17,6 +17,7 @@ import { managerHandlers } from './handlers/managerHandlers';
 import { policyHandlers } from './handlers/policyHandlers';
 import { rbacHandlers } from './handlers/rbacHandlers';
 import { releaseHandlers } from './handlers/releases';
+import { remediationHandlers } from './handlers/remediationHandlers';
 import { scoreHandlers } from './handlers/scores';
 import { securityHandlers } from './handlers/securityHandlers';
 import { serviceHandlers } from './handlers/services';
@@ -32,4 +33,5 @@ export const server = setupServer(
   ...rbacHandlers,
   ...managerHandlers,
   ...securityHandlers,
+  ...remediationHandlers,
 );
