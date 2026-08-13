@@ -651,3 +651,10 @@
 - **Files:** 13 (+1888/-0)
 - **Duration:** 811ss
 - **Approach:** Implemented Forge Scorecard publishing as a fire-and-forget side-effect after Health Score assessment completion. Created ForgeScorecardAdapter ABC with ForgeScorecardHttpAdapter (httpx + X-Forge-Api-Key header), SyncQueueService with SELECT FOR UPDATE SKIP LOCKED for concurrent-safe job processing, exponential backoff [2,4,8,16,32]s with max 5 retries. Assessment orchestrator calls _publish_scorecard() after each assessment; on retryable failure the job is enqueued; on max-retries-exhausted the record is marked stale. Background asyncio task polls pending_sync_jobs every 30s during application lifespan. API key is injected only via HTTP header, never logged or included in audit records or error responses.
+
+## WO-097: User Story: WO-097 - Integration Tests for Full Assessment Pipeline
+- **Status:** completed
+- **Commit:** `b470936`
+- **Files:** 3 (+1172/-0)
+- **Duration:** 616ss
+- **Approach:** Created three integration test files that exercise the complete HTTP → middleware → route handler → mocked service → response pipeline. All database and LLM calls are mocked via FastAPI dependency_overrides following the pattern established in test_releases_pipeline.py. The conftest.py provides a make_health_app() factory that builds a full ForgeGuard FastAPI app with deterministic mock orchestrators, repos, and audit service injected via dependency_overrides. Tests cover health assessment (POST assess / GET scores), release assessment (POST /api/v1/releases/assess), error handling (404, 401, 403, 409, 500), and the full middleware chain (RequestID, Auth, RBAC, InputValidation, SecurityHeaders). No Docker or external services required for any test in this WO.
