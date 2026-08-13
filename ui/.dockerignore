@@ -1,0 +1,33 @@
+# Exclude from Docker build context to minimize image size and avoid
+# accidentally baking development artifacts into the production image.
+
+# Node dependencies — installed fresh inside the container by npm ci
+node_modules/
+
+# Previous production bundle — rebuilt inside the container by npm run build
+dist/
+
+# Git history — not needed in the image
+.git/
+.gitignore
+
+# Test files — not needed in the production image
+src/__tests__/
+src/test/
+src/test-setup.ts
+src/test-utils.tsx
+vitest.config.ts
+coverage/
+
+# Editor and OS artifacts
+.vscode/
+.idea/
+*.DS_Store
+*.swp
+*.swo
+
+# CI and linting config — not needed at runtime
+.eslintrc*
+eslint.config.*
+.prettierrc*
+*.log

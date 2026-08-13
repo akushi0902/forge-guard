@@ -1,0 +1,95 @@
+{
+  "transactions": [
+    {
+      "amount": "49.99",
+      "currency": "USD",
+      "merchant": "Acme Electronics Store",
+      "card_last_four": "4242",
+      "status": "approved"
+    },
+    {
+      "amount": "0.01",
+      "currency": "EUR",
+      "merchant": "Minimum Amount Merchant",
+      "card_last_four": "0000",
+      "status": "approved"
+    },
+    {
+      "amount": "9999.99",
+      "currency": "GBP",
+      "merchant": "Maximum Amount Merchant",
+      "card_last_four": "9999",
+      "status": "approved"
+    },
+    {
+      "amount": "150.00",
+      "currency": "JPY",
+      "merchant": "Tokyo Restaurant",
+      "card_last_four": "1234",
+      "status": "declined"
+    },
+    {
+      "amount": "275.50",
+      "currency": "CAD",
+      "merchant": "Maple Hotel & Lodging",
+      "card_last_four": "5678",
+      "status": "approved"
+    }
+  ],
+  "invalid_requests": [
+    {
+      "description": "amount below minimum",
+      "payload": {
+        "amount": "0.00",
+        "currency": "USD",
+        "merchant": "Test Merchant",
+        "card_last_four": "1234"
+      }
+    },
+    {
+      "description": "amount above maximum",
+      "payload": {
+        "amount": "10000.00",
+        "currency": "USD",
+        "merchant": "Test Merchant",
+        "card_last_four": "1234"
+      }
+    },
+    {
+      "description": "invalid currency code",
+      "payload": {
+        "amount": "100.00",
+        "currency": "XXX",
+        "merchant": "Test Merchant",
+        "card_last_four": "1234"
+      }
+    },
+    {
+      "description": "card_last_four not digits",
+      "payload": {
+        "amount": "100.00",
+        "currency": "USD",
+        "merchant": "Test Merchant",
+        "card_last_four": "ABCD"
+      }
+    },
+    {
+      "description": "card_last_four too long",
+      "payload": {
+        "amount": "100.00",
+        "currency": "USD",
+        "merchant": "Test Merchant",
+        "card_last_four": "12345"
+      }
+    },
+    {
+      "description": "negative amount",
+      "payload": {
+        "amount": "-10.00",
+        "currency": "USD",
+        "merchant": "Test Merchant",
+        "card_last_four": "1234"
+      }
+    }
+  ]
+}

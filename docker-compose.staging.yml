@@ -1,0 +1,78 @@
+# ForgeGuard — Staging environment overrides for docker-compose.yml
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+#
+# Staging characteristics:
+#   - Production-like resource limits (same as prod, no dev overhead)
+#   - No source-code volume mounts (uses built images only)
+#   - LOG_LEVEL=WARNING (quieter than dev, not as quiet as prod INFO)
+#   - PostgreSQL NOT exposed to host (internal network only)
+#   - Credentials injected via environment variable substitution from
+#     a staging-specific .env file (never committed to the repository)
+
+name: forgeguard
+
+services:
+
+  forgeguard-db:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-forgeguard_staging}
+    # No host port exposure — accessed only by backend on the internal network.
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
+
+  forgeguard-migration:
+    image: ${IMAGE_BACKEND:?IMAGE_BACKEND must be set}:${IMAGE_TAG:?IMAGE_TAG must be set}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
+      LOG_LEVEL: WARNING
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.25"
+
+  forgeguard-backend:
+    image: ${IMAGE_BACKEND:?IMAGE_BACKEND must be set}:${IMAGE_TAG:?IMAGE_TAG must be set}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set}
+      LOG_LEVEL: WARNING
+      APP_ENV: staging
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      FORGE_CATALOG_URL: ${FORGE_CATALOG_URL:?FORGE_CATALOG_URL must be set}
+      PYTHONPATH: /app/src
+    # No source-code volume mounts — staging uses the built image.
+    volumes: []
+    # No debug port exposure.
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+      replicas: 1
+
+  forgeguard-frontend:
+    image: ${IMAGE_FRONTEND:?IMAGE_FRONTEND must be set}:${IMAGE_TAG:?IMAGE_TAG must be set}
+    environment:
+      NGINX_ENVSUBST_TEMPLATE_DIR: /etc/nginx/templates
+    # No source-code volume mounts.
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/forgeguard.conf:ro
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.25"

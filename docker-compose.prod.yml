@@ -1,0 +1,120 @@
+# ForgeGuard — Production environment overrides for docker-compose.yml
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Production characteristics:
+#   - Strict resource limits matching the architecture specification
+#   - No source-code volume mounts — built images only
+#   - No debug ports exposed
+#   - LOG_LEVEL=INFO
+#   - Credentials injected via Docker secrets (preferred) or env vars
+#   - PostgreSQL port NOT exposed to host
+#   - Restart policy: always (survive host reboots)
+
+name: forgeguard
+
+# Docker secrets for production credentials.
+# Each secret is a single-value file managed outside this repository.
+secrets:
+  postgres_password:
+    external: true
+  jwt_secret_key:
+    external: true
+  llm_api_key:
+    external: true
+  database_url:
+    external: true
+
+services:
+
+  forgeguard-db:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: ${POSTGRES_DB:-forgeguard_prod}
+    secrets:
+      - postgres_password
+    # No host port exposure in production.
+    ports: []
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "2.0"
+
+  forgeguard-migration:
+    image: ${IMAGE_BACKEND:?IMAGE_BACKEND must be set}:${IMAGE_TAG:?IMAGE_TAG must be set}
+    environment:
+      LOG_LEVEL: INFO
+      PYTHONPATH: /app/src
+    secrets:
+      - database_url
+    # Read DATABASE_URL from the Docker secret file.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        export DATABASE_URL=$(cat /run/secrets/database_url)
+        exec alembic upgrade head
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.25"
+    restart: "no"
+
+  forgeguard-backend:
+    image: ${IMAGE_BACKEND:?IMAGE_BACKEND must be set}:${IMAGE_TAG:?IMAGE_TAG must be set}
+    environment:
+      LOG_LEVEL: INFO
+      APP_ENV: production
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      FORGE_CATALOG_URL: ${FORGE_CATALOG_URL:?FORGE_CATALOG_URL must be set}
+      PYTHONPATH: /app/src
+    secrets:
+      - database_url
+      - jwt_secret_key
+      - llm_api_key
+    # Inject secrets from files at container startup.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        export DATABASE_URL=$(cat /run/secrets/database_url)
+        export JWT_SECRET_KEY=$(cat /run/secrets/jwt_secret_key)
+        export LLM_API_KEY=$(cat /run/secrets/llm_api_key)
+        exec gunicorn forgeguard.main:create_app \
+          --worker-class uvicorn.workers.UvicornWorker \
+          --workers 2 \
+          --bind 0.0.0.0:8000 \
+          --timeout 30 \
+          --access-logfile -
+    # No source-code volume mounts in production.
+    volumes: []
+    # No direct port exposure — traffic goes through nginx.
+    ports: []
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+      replicas: 1
+
+  forgeguard-frontend:
+    image: ${IMAGE_FRONTEND:?IMAGE_FRONTEND must be set}:${IMAGE_TAG:?IMAGE_TAG must be set}
+    environment:
+      NGINX_ENVSUBST_TEMPLATE_DIR: /etc/nginx/templates
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/forgeguard.conf:ro
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.25"

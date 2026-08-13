@@ -1,0 +1,72 @@
+name: dependency_heavy_change
+description: "Dependency-heavy change: 10 dependency updates, 2 CVEs, minimal code changes"
+
+commit_sha: "fed321cba654fed321cba654fed321cba654fed3"
+pr_reference: "77"
+
+files:
+  - filename: "requirements.txt"
+    status: modified
+    additions: 10
+    deletions: 10
+    is_binary: false
+    patch: |
+      @@ -1,12 +1,12 @@
+      -werkzeug==2.2.0
+      +werkzeug==3.0.1
+      -requests==2.28.0
+      +requests==2.31.0
+      -urllib3==1.26.10
+      +urllib3==2.0.7
+      -cryptography==40.0.0
+      +cryptography==42.0.4
+      -setuptools==65.0.0
+      +setuptools==68.0.0
+      -certifi==2022.6.15
+      +certifi==2023.11.17
+      -jinja2==3.0.3
+      +jinja2==3.1.4
+      -sqlalchemy==1.4.40
+      +sqlalchemy==2.0.25
+      -pip==22.0.0
+      +pip==23.3.1
+      -py==1.10.0
+      +py==1.11.0
+
+  - filename: "src/payments/processor.py"
+    status: modified
+    additions: 5
+    deletions: 3
+    is_binary: false
+    patch: |
+      @@ -10,3 +10,5 @@
+      -def process(amount):
+      +def process(amount, currency="USD"):
+      +    if currency not in SUPPORTED_CURRENCIES:
+      +        raise ValueError(f"Unsupported currency: {currency}")
+           return charge(amount)
+
+dependency_manifests:
+  - filename: "requirements.txt"
+    manifest_type: requirements
+    added_dependencies:
+      - name: werkzeug
+        change_type: updated
+        from_version: "2.2.0"
+        to_version: "3.0.1"
+      - name: requests
+        change_type: updated
+        from_version: "2.28.0"
+        to_version: "2.31.0"
+      - name: urllib3
+        change_type: updated
+        from_version: "1.26.10"
+        to_version: "2.0.7"
+      - name: cryptography
+        change_type: updated
+        from_version: "40.0.0"
+        to_version: "42.0.4"
+      - name: setuptools
+        change_type: updated
+        from_version: "65.0.0"
+        to_version: "68.0.0"

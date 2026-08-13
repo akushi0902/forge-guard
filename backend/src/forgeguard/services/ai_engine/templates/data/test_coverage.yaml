@@ -1,0 +1,87 @@
+# Test Coverage Finding Templates
+# Covers the 4 most common test coverage findings
+
+templates:
+  - finding_type: low_coverage_delta
+    dimension: test_coverage
+    severity_levels:
+      - medium
+      - high
+      - critical
+    explanation_template: >
+      The changes in {pr_reference} for {service_name} reduce the test coverage of {finding_title}
+      from {threshold_value}% to {actual_value}%. A decreasing coverage delta indicates that new code
+      is being shipped without corresponding tests, making it harder to detect regressions and harder
+      to refactor safely in the future.
+    business_impact_template: >
+      Declining test coverage in {service_name} compounds over time: each uncovered line is a
+      potential defect that escapes to production. Low coverage in {finding_title} directly increases
+      the mean time to detect (MTTD) for bugs introduced in this area, raising incident frequency
+      and on-call burden.
+    remediation_steps:
+      - "Add unit tests for each new function or method introduced in {finding_title} within {pr_reference}."
+      - "Aim to restore coverage to at least {threshold_value}% before merging."
+      - "Prioritise testing edge cases and error paths, which are the most likely sources of defects."
+      - "Use a coverage report (e.g. pytest-cov) to identify specific uncovered lines and target them."
+      - "Consider adopting a coverage gate in CI to prevent future decreases below the agreed threshold."
+
+  - finding_type: missing_unit_tests
+    dimension: test_coverage
+    severity_levels:
+      - medium
+      - high
+    explanation_template: >
+      {finding_title} in {service_name} introduces new logic in {pr_reference} without accompanying
+      unit tests. Unit tests provide fast, isolated verification that individual functions behave
+      as expected across normal, boundary, and error inputs. Their absence means correctness relies
+      entirely on manual review and integration-level tests, which are slower and less precise.
+    business_impact_template: >
+      Without unit tests for {finding_title}, bugs introduced by future refactoring will not be
+      caught until integration or staging, significantly increasing fix cost and delaying {service_name}
+      deployments.
+    remediation_steps:
+      - "Create a test file alongside {finding_title}, following the project's existing test naming conventions."
+      - "Write at least one test for the happy path, one for each expected error path, and one for boundary values."
+      - "Mock external dependencies (databases, HTTP clients) to keep unit tests fast and deterministic."
+      - "Run the new tests locally with `pytest -v {finding_title}` to confirm they pass and provide meaningful failure messages."
+
+  - finding_type: missing_integration_tests
+    dimension: test_coverage
+    severity_levels:
+      - high
+      - critical
+    explanation_template: >
+      The new API or service interaction introduced in {pr_reference} for {service_name} lacks
+      integration tests for {finding_title}. Integration tests verify that components collaborate
+      correctly across real I/O boundaries (database, HTTP, message queue) and catch contract
+      violations that unit tests cannot detect.
+    business_impact_template: >
+      Missing integration tests for {finding_title} in {service_name} increase the risk of silent
+      data corruption, broken API contracts, and inter-service failures that only surface in
+      production under realistic load and data shapes.
+    remediation_steps:
+      - "Add integration tests that exercise {finding_title} against a real (or Docker-based) dependency, not a mock."
+      - "Test both the success path and at least one failure mode (e.g. timeout, constraint violation, 404 response)."
+      - "Ensure integration tests run in CI on every pull request, not just in staging."
+      - "Consider using testcontainers or a dedicated test database to keep integration tests reproducible."
+
+  - finding_type: test_regression
+    dimension: test_coverage
+    severity_levels:
+      - high
+      - critical
+    explanation_template: >
+      {pr_reference} for {service_name} caused {actual_value} previously passing tests to fail in
+      {finding_title}. A test regression means the change broke existing, verified behaviour. This
+      must be resolved before merging; silencing failing tests without fixing the underlying issue
+      is not an acceptable resolution.
+    business_impact_template: >
+      Test regressions in {service_name} signal a breaking change to {finding_title}. If merged,
+      the broken behaviour will reach staging or production, requiring an emergency fix or rollback.
+      Resolving regressions before merge is always cheaper than after.
+    remediation_steps:
+      - "Run the failing tests locally to reproduce the regression: `pytest {finding_title} -v`."
+      - "Read each failing test to understand what contract it was asserting — this is the behaviour that was broken."
+      - "Determine whether the test expectation or the implementation needs to change; update both with a clear rationale."
+      - "Do not delete or mark tests as `xfail` without team agreement and a documented reason."
+      - "After fixing, re-run the full test suite to confirm no secondary regressions were introduced."

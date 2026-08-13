@@ -1,0 +1,7 @@
+{
+  "error": "forbidden",
+  "permission": "health.monitor",
+  "required_role": ["Operator", "Platform Admin"],
+  "message": "This action requires the 'health.monitor' permission assigned to the Operator or Platform Admin role.",
+  "action": "Contact your Platform Admin for access."
+}

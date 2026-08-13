@@ -1,0 +1,57 @@
+name: test_only_change
+description: "Test-only change: only test files modified, no production code changed"
+
+commit_sha: "f0e1d2c3b4a5f0e1d2c3b4a5f0e1d2c3b4a5f0e1"
+pr_reference: "101"
+
+files:
+  - filename: "tests/test_payment_processor.py"
+    status: modified
+    additions: 45
+    deletions: 5
+    is_binary: false
+    patch: |
+      @@ -10,5 +10,50 @@
+      +def test_process_payment_valid():
+      +    result = process_payment(100, "USD")
+      +    assert result.status == "success"
+      +
+      +def test_process_payment_zero_raises():
+      +    with pytest.raises(ValueError):
+      +        process_payment(0)
+      +
+      +def test_process_payment_negative_raises():
+      +    with pytest.raises(ValueError):
+      +        process_payment(-50)
+      +
+      +def test_process_payment_unsupported_currency():
+      +    with pytest.raises(ValueError):
+      +        process_payment(100, "XYZ")
+      +
+      +def test_process_payment_with_retry():
+      +    result = process_payment(100, retry=True)
+      +    assert result is not None
+
+  - filename: "tests/test_refunds.py"
+    status: added
+    additions: 30
+    deletions: 0
+    is_binary: false
+    patch: |
+      @@ -0,0 +1,30 @@
+      +import pytest
+      +from src.payments.refunds import process_refund
+      +
+      +def test_process_refund_valid():
+      +    result = process_refund("pay_123", 50)
+      +    assert result.status == "refunded"
+      +
+      +def test_process_refund_no_amount():
+      +    result = process_refund("pay_456")
+      +    assert result is not None
+      +
+      +def test_process_refund_invalid_id():
+      +    with pytest.raises(Exception):
+      +        process_refund("", 50)
+
+dependency_manifests: []

@@ -1,0 +1,475 @@
+"""Remediation lifecycle API endpoints (WO-058, WO-062).
+
+Routes:
+    GET  /api/v1/findings/{finding_id}/remediation  — get/generate remediation recommendation
+    POST /api/v1/findings/{finding_id}/exceptions   — submit exception request
+    GET  /api/v1/exceptions/{exception_id}          — retrieve exception details
+
+RBAC:
+  - GET remediation: service.view permission (all authenticated roles)
+  - POST exception:  exception.request permission (Developer, Tech Lead, Platform Admin)
+  - GET exception:   service.view permission (all authenticated roles)
+"""
+
+from __future__ import annotations
+
+import uuid
+from typing import Annotated, Optional
+
+import asyncpg
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
+
+from forgeguard.api.dependencies.audit import get_audit_service
+from forgeguard.api.dependencies.auth import CurrentUser, CurrentUserDep
+from forgeguard.api.schemas.exception import (
+    ExceptionDecisionRequest,
+    ExceptionDecisionResponse,
+    ExceptionListResponse,
+    ExceptionRequest,
+    ExceptionResponse,
+)
+from forgeguard.api.schemas.remediation import ReEvaluationResponse, RemediationResponse
+from forgeguard.core.dependencies import get_pool
+from forgeguard.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
+from forgeguard.core.permissions import Permissions, has_permission
+from forgeguard.data.repositories.exception_repository import ExceptionRepository
+from forgeguard.data.repositories.findings import FindingRepository
+from forgeguard.data.repositories.remediation_recommendation_repository import (
+    RemediationRecommendationRepository,
+)
+from forgeguard.services.ai_engine.circuit_breaker import CircuitBreaker
+from forgeguard.services.ai_engine.recommendation_generator import RecommendationGenerator
+from forgeguard.services.ai_engine.service import AIEngineService
+from forgeguard.services.audit import AuditService
+from forgeguard.services.remediation.exception_service import ExceptionService
+from forgeguard.services.remediation.recommendation_service import RecommendationService
+
+logger = structlog.get_logger(__name__)
+
+router = APIRouter(tags=["remediation"])
+
+_FORBIDDEN_MSG = (
+    "This action requires the exception.request permission. "
+    "Developers and Tech Leads may submit exception requests."
+)
+
+
+# ---------------------------------------------------------------------------
+# Dependency providers
+# ---------------------------------------------------------------------------
+
+
+async def get_finding_repo(pool: asyncpg.Pool = Depends(get_pool)) -> FindingRepository:
+    return FindingRepository(pool)
+
+
+async def get_exception_repo(pool: asyncpg.Pool = Depends(get_pool)) -> ExceptionRepository:
+    return ExceptionRepository(pool)
+
+
+async def get_rec_repo(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> RemediationRecommendationRepository:
+    return RemediationRecommendationRepository(pool)
+
+
+async def get_recommendation_service(
+    pool: asyncpg.Pool = Depends(get_pool),
+    finding_repo: FindingRepository = Depends(get_finding_repo),
+    rec_repo: RemediationRecommendationRepository = Depends(get_rec_repo),
+    audit_svc: AuditService = Depends(get_audit_service),
+) -> RecommendationService:
+    from forgeguard.services.ai_engine.cache import ResponseCache
+    from forgeguard.services.ai_engine.providers.openai_provider import OpenAIProvider
+    from forgeguard.services.ai_engine.response_cache import DBResponseCache
+    from forgeguard.data.repositories.cache_repository import CacheRepository
+    from forgeguard.core.config import get_settings
+
+    settings = get_settings()
+    provider = OpenAIProvider(api_key=getattr(settings, "openai_api_key", ""))
+    cb = CircuitBreaker(failure_threshold=5, window_seconds=60, recovery_timeout=30)
+    cache = ResponseCache()
+    ai_engine = AIEngineService(provider=provider, circuit_breaker=cb, cache=cache)
+    generator = RecommendationGenerator(ai_engine=ai_engine)
+    cache_repo = CacheRepository(pool)
+    response_cache = DBResponseCache(
+        cache_repo=cache_repo,
+        ttl_seconds=settings.ai_cache_ttl_seconds,
+    )
+    return RecommendationService(
+        finding_repo=finding_repo,
+        rec_repo=rec_repo,
+        generator=generator,
+        audit_svc=audit_svc,
+        response_cache=response_cache,
+    )
+
+
+async def get_exception_service(
+    exception_repo: ExceptionRepository = Depends(get_exception_repo),
+    finding_repo: FindingRepository = Depends(get_finding_repo),
+    audit_svc: AuditService = Depends(get_audit_service),
+) -> ExceptionService:
+    return ExceptionService(exception_repo, finding_repo, audit_svc)
+
+
+async def _require_exception_request(current_user: CurrentUserDep) -> CurrentUser:
+    """Enforce exception.request permission and return the authenticated user."""
+    if not has_permission(current_user.role, Permissions.EXCEPTION_REQUEST):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": {
+                    "code": "forbidden",
+                    "message": _FORBIDDEN_MSG,
+                    "details": None,
+                }
+            },
+        )
+    return current_user
+
+
+ExceptionRequestDep = Annotated[CurrentUser, Depends(_require_exception_request)]
+
+
+_APPROVE_FORBIDDEN_MSG = (
+    "This action requires the exception.approve permission. "
+    "Security Reviewers and Platform Admins may decide exception requests."
+)
+
+
+async def _require_exception_approve(current_user: CurrentUserDep) -> CurrentUser:
+    """Enforce exception.approve permission (platform_admin) or security_reviewer role."""
+    can_approve = has_permission(current_user.role, Permissions.EXCEPTION_APPROVE) or \
+        has_permission(current_user.role, Permissions.RELEASE_BLOCK)
+    if not can_approve:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": {
+                    "code": "forbidden",
+                    "message": _APPROVE_FORBIDDEN_MSG,
+                    "details": None,
+                }
+            },
+        )
+    return current_user
+
+
+ExceptionApproveDep = Annotated[CurrentUser, Depends(_require_exception_approve)]
+
+
+# ---------------------------------------------------------------------------
+# Helper
+# ---------------------------------------------------------------------------
+
+
+def _exception_response(row: dict) -> ExceptionResponse:
+    return ExceptionResponse(
+        id=row["id"],
+        finding_id=row["finding_id"],
+        requested_by=row.get("requested_by"),
+        justification=row["justification"],
+        status=row["status"],
+        approver_role=row["approver_role"],
+        decided_by=row.get("decided_by"),
+        decision_comment=row.get("decision_comment"),
+        expires_at=row["expires_at"],
+        decided_at=row.get("decided_at"),
+        created_at=row["created_at"],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/api/v1/findings/{finding_id}/remediation",
+    response_model=RemediationResponse,
+    summary="Get or generate a remediation recommendation for a finding",
+)
+async def get_remediation(
+    finding_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUserDep,
+    force_refresh: bool = Query(default=False, description="Force regeneration even if cached"),
+    svc: RecommendationService = Depends(get_recommendation_service),
+) -> RemediationResponse:
+    """Return the remediation recommendation for a finding, generating it if needed.
+
+    The recommendation is cached — subsequent calls return the same record
+    unless force_refresh=true is supplied.  Source is 'ai_generated' when the
+    LLM was available, or 'template_fallback' when the circuit breaker was open.
+    """
+    correlation_id = request.headers.get("x-request-id")
+    try:
+        rec = await svc.get_or_generate(
+            finding_id=finding_id,
+            actor_id=str(current_user.user_id),
+            actor_role=current_user.role,
+            force_refresh=force_refresh,
+            correlation_id=correlation_id,
+        )
+    except NotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Finding not found", "error_code": "FINDING_NOT_FOUND"},
+        )
+    return RemediationResponse(
+        id=rec["id"],
+        finding_id=rec["finding_id"],
+        recommendation_text=rec["recommendation_text"],
+        implementation_guide=rec.get("implementation_guide") or "",
+        business_impact=rec.get("business_impact"),
+        confidence_score=rec.get("confidence_score"),
+        source=rec["source"],
+        created_at=rec["created_at"],
+    )
+
+
+@router.post(
+    "/api/v1/findings/{finding_id}/exceptions",
+    status_code=201,
+    summary="Submit an exception request for an open finding",
+)
+async def submit_exception_request(
+    finding_id: uuid.UUID,
+    body: ExceptionRequest,
+    request: Request,
+    current_user: ExceptionRequestDep,
+    svc: ExceptionService = Depends(get_exception_service),
+) -> JSONResponse:
+    """Submit a time-bounded exception request for a policy finding.
+
+    The approver is automatically determined from the finding's dimension:
+    security findings route to Security Reviewer, all others to Platform Admin.
+    """
+    try:
+        created = await svc.submit_request(
+            finding_id=finding_id,
+            justification=body.justification,
+            expires_at=body.expires_at,
+            actor_id=str(current_user.user_id),
+            actor_role=current_user.role,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": str(exc), "error_code": "NOT_FOUND"},
+        )
+    except BadRequestError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": str(exc), "error_code": getattr(exc, "details", {}).get("error_code", "BAD_REQUEST")},
+        )
+    except ConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"detail": str(exc), "error_code": "CONFLICT"},
+        )
+
+    return JSONResponse(
+        status_code=201,
+        content=_exception_response(created).model_dump(mode="json"),
+    )
+
+
+@router.get(
+    "/api/v1/exceptions/{exception_id}",
+    response_model=ExceptionResponse,
+    summary="Retrieve an exception request by ID",
+)
+async def get_exception(
+    exception_id: uuid.UUID,
+    svc: ExceptionService = Depends(get_exception_service),
+) -> ExceptionResponse:
+    """Return the full details of an exception request."""
+    row = await svc.get_exception(exception_id)
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": f"Exception {exception_id} not found"},
+        )
+    return _exception_response(row)
+
+
+@router.post(
+    "/api/v1/findings/{finding_id}/re-evaluate",
+    response_model=ReEvaluationResponse,
+    status_code=200,
+    summary="Re-evaluate a finding after a remediation attempt",
+    description=(
+        "Captures the before-state, re-runs the relevant policy checks, updates the "
+        "finding status based on results, recalculates the Health Score, and returns a "
+        "structured before/after comparison. Requires assessment.request permission."
+    ),
+)
+async def re_evaluate_finding(
+    finding_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUserDep,
+    pool: asyncpg.Pool = Depends(get_pool),
+    audit_svc: AuditService = Depends(get_audit_service),
+) -> ReEvaluationResponse:
+    """Trigger re-evaluation of an open finding to verify a remediation fix."""
+    if not has_permission(current_user.role, Permissions.ASSESSMENT_REQUEST):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": {
+                    "code": "forbidden",
+                    "message": (
+                        "This action requires the assessment.request permission. "
+                        "Developers, Tech Leads, and Platform Admins may re-evaluate findings."
+                    ),
+                    "details": None,
+                }
+            },
+        )
+
+    from forgeguard.core.dependencies import get_ai_engine  # noqa: PLC0415
+    from forgeguard.data.repositories.assessment_repository import AssessmentRepository  # noqa: PLC0415
+    from forgeguard.data.repositories.assessment_score_repository import AssessmentScoreRepository  # noqa: PLC0415
+    from forgeguard.data.repositories.policies import PolicyRepository  # noqa: PLC0415
+    from forgeguard.services.evaluation_engine import RuleEvaluationEngine  # noqa: PLC0415
+    from forgeguard.services.mock_data_collector import MockDataCollector  # noqa: PLC0415
+    from forgeguard.services.remediation.reevaluation_service import ReEvaluationService  # noqa: PLC0415
+
+    svc = ReEvaluationService(
+        finding_repo=FindingRepository(pool),
+        policy_repo=PolicyRepository(pool),
+        score_repo=AssessmentScoreRepository(pool),
+        assessment_repo=AssessmentRepository(pool),
+        audit_svc=audit_svc,
+        ai_engine=get_ai_engine(),
+        evaluation_engine=RuleEvaluationEngine(),
+        data_collector=MockDataCollector(),
+    )
+
+    from forgeguard.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError  # noqa: PLC0415
+
+    try:
+        return await svc.re_evaluate(
+            finding_id,
+            actor_id=str(current_user.user_id),
+            actor_role=current_user.role,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail={"detail": str(exc)})
+    except BadRequestError as exc:
+        err_code = (exc.details or {}).get("error_code", "BAD_REQUEST")
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": str(exc), "error_code": err_code},
+        )
+    except ConflictError as exc:
+        err_code = (exc.details or {}).get("error_code", "CONFLICT")
+        raise HTTPException(
+            status_code=409,
+            detail={"detail": str(exc), "error_code": err_code},
+        )
+
+
+@router.post(
+    "/api/v1/exceptions/{exception_id}/decide",
+    response_model=ExceptionDecisionResponse,
+    status_code=200,
+    summary="Approve or deny a pending exception request",
+)
+async def decide_exception(
+    exception_id: uuid.UUID,
+    body: ExceptionDecisionRequest,
+    current_user: ExceptionApproveDep,
+    svc: ExceptionService = Depends(get_exception_service),
+) -> ExceptionDecisionResponse:
+    """Approve or deny a pending exception request.
+
+    Security-dimension exceptions must be decided by Security Reviewer;
+    all other exceptions must be decided by Platform Admin.  Role enforcement
+    is performed inside the service based on the exception's approver_role.
+    """
+    try:
+        result = await svc.decide_exception(
+            exception_id=exception_id,
+            decision=body.decision,
+            decision_comment=body.decision_comment,
+            actor_id=str(current_user.user_id),
+            actor_role=current_user.role,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail={"detail": str(exc)})
+    except ForbiddenError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"detail": str(exc), "required_role": (exc.details or {}).get("required_role", "")},
+        )
+    except BadRequestError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": str(exc), "error_code": (exc.details or {}).get("error_code", "BAD_REQUEST")},
+        )
+    except ConflictError as exc:
+        raise HTTPException(status_code=409, detail={"detail": str(exc)})
+
+    return ExceptionDecisionResponse(
+        id=result["id"],
+        finding_id=result["finding_id"],
+        status=result["status"],
+        decided_by=result.get("decided_by"),
+        decision_comment=result["decision_comment"],
+        decided_at=result["decided_at"],
+        finding_status=result["finding_status"],
+        health_score_impact=result.get("health_score_impact"),
+    )
+
+
+@router.get(
+    "/api/v1/exceptions",
+    response_model=ExceptionListResponse,
+    summary="List exceptions with optional status and approver_role filters",
+)
+async def list_exceptions(
+    current_user: CurrentUserDep,
+    exception_repo: ExceptionRepository = Depends(get_exception_repo),
+    status: Optional[str] = Query(default=None, description="Filter by status (e.g. 'pending')"),
+    approver_role: Optional[str] = Query(default=None, description="Filter by approver_role"),
+    cursor: Optional[str] = Query(default=None, description="Pagination cursor"),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> ExceptionListResponse:
+    """Return a paginated list of exceptions matching the given filters.
+
+    Approvers use ``?status=pending&approver_role={role}`` to view their queue.
+    """
+    if not has_permission(current_user.role, Permissions.SERVICE_VIEW):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": {"code": "forbidden", "message": "service.view permission required", "details": None}},
+        )
+
+    rows = await exception_repo.list_by_status_and_role(
+        status=status,
+        approver_role=approver_role,
+        cursor=cursor,
+        limit=limit,
+    )
+    total = await exception_repo.count_by_status_and_role(
+        status=status,
+        approver_role=approver_role,
+    )
+
+    items = [_exception_response(row) for row in rows]
+
+    last_cursor = None
+    if rows:
+        last_row = rows[-1]
+        created_at = last_row.get("created_at")
+        row_id = last_row.get("id")
+        if created_at and row_id:
+            ts = created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at)
+            last_cursor = f"{ts}:{row_id}"
+
+    return ExceptionListResponse(items=items, total=total, cursor=last_cursor)

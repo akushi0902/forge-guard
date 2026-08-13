@@ -1,0 +1,162 @@
+[
+  {
+    "id": "c0000000-0000-0000-0000-000000000001",
+    "policy_id": "e0000000-0000-0000-0000-000000000001",
+    "name": "Cyclomatic Complexity Threshold",
+    "rule_type": "threshold_lte",
+    "threshold_config": {
+      "data_key": "cyclomatic_complexity",
+      "numeric_value": 10,
+      "operator": "lte",
+      "unit": "count",
+      "description": "Maximum allowed cyclomatic complexity per module"
+    },
+    "severity": "high",
+    "weight": "2.0",
+    "is_active": true
+  },
+  {
+    "id": "c0000000-0000-0000-0000-000000000002",
+    "policy_id": "e0000000-0000-0000-0000-000000000001",
+    "name": "Code Duplication Percentage",
+    "rule_type": "threshold_lte",
+    "threshold_config": {
+      "data_key": "code_duplication_ratio",
+      "numeric_value": 5,
+      "operator": "lte",
+      "unit": "percent",
+      "description": "Maximum percentage of duplicated code blocks"
+    },
+    "severity": "medium",
+    "weight": "1.5",
+    "is_active": true
+  },
+  {
+    "id": "c0000000-0000-0000-0000-000000000003",
+    "policy_id": "e0000000-0000-0000-0000-000000000002",
+    "name": "Minimum Coverage Percentage",
+    "rule_type": "threshold_gte",
+    "threshold_config": {
+      "data_key": "unit_test_coverage",
+      "numeric_value": 80,
+      "operator": "gte",
+      "unit": "percent",
+      "description": "Minimum required unit test line coverage"
+    },
+    "severity": "high",
+    "weight": "2.5",
+    "is_active": true
+  },
+  {
+    "id": "c0000000-0000-0000-0000-000000000004",
+    "policy_id": "e0000000-0000-0000-0000-000000000002",
+    "name": "Critical Path Coverage",
+    "rule_type": "threshold_gte",
+    "threshold_config": {
+      "data_key": "critical_path_coverage",
+      "numeric_value": 95,
+      "operator": "gte",
+      "unit": "percent",
+      "description": "Coverage of payment and auth critical code paths"
+    },
+    "severity": "critical",
+    "weight": "3.0",
+    "is_active": true
+  },
+  {
+    "id": "c0000000-0000-0000-0000-000000000005",
+    "policy_id": "e0000000-0000-0000-0000-000000000003",
+    "name": "Dependency Vulnerability Check",
+    "rule_type": "threshold_eq",
+    "threshold_config": {
+      "data_key": "critical_cve_count",
+      "numeric_value": 0,
+      "operator": "eq",
+      "unit": "count",
+      "description": "Zero critical CVEs allowed in production dependencies"
+    },
+    "severity": "critical",
+    "weight": "3.0",
+    "is_active": true
+  },
+  {
+    "id": "c0000000-0000-0000-0000-000000000006",
+    "policy_id": "e0000000-0000-0000-0000-000000000003",
+    "name": "Input Validation Coverage",
+    "rule_type": "threshold_gte",
+    "threshold_config": {
+      "data_key": "input_validation_coverage",
+      "numeric_value": 100,
+      "operator": "gte",
+      "unit": "percent",
+      "description": "All API endpoints must validate and sanitise inputs"
+    },
+    "severity": "high",
+    "weight": "2.5",
+    "is_active": true
+  },
+  {
+    "id": "c0000000-0000-0000-0000-000000000007",
+    "policy_id": "e0000000-0000-0000-0000-000000000004",
+    "name": "API Documentation Completeness",
+    "rule_type": "threshold_gte",
+    "threshold_config": {
+      "data_key": "api_doc_coverage",
+      "numeric_value": 90,
+      "operator": "gte",
+      "unit": "percent",
+      "description": "OpenAPI/Swagger spec coverage across all endpoints"
+    },
+    "severity": "medium",
+    "weight": "1.0",
+    "is_active": true
+  },
+  {
+    "id": "c0000000-0000-0000-0000-000000000008",
+    "policy_id": "e0000000-0000-0000-0000-000000000004",
+    "name": "README Completeness",
+    "rule_type": "threshold_eq",
+    "threshold_config": {
+      "data_key": "readme_complete",
+      "numeric_value": 1,
+      "operator": "eq",
+      "unit": "boolean",
+      "description": "README must contain: overview, setup, API reference, runbook link"
+    },
+    "severity": "low",
+    "weight": "0.5",
+    "is_active": true
+  },
+  {
+    "id": "c0000000-0000-0000-0000-000000000009",
+    "policy_id": "e0000000-0000-0000-0000-000000000005",
+    "name": "Health Check Endpoint",
+    "rule_type": "threshold_eq",
+    "threshold_config": {
+      "data_key": "health_check_endpoint_present",
+      "numeric_value": 1,
+      "operator": "eq",
+      "unit": "boolean",
+      "description": "Service must expose /health and /ready endpoints"
+    },
+    "severity": "high",
+    "weight": "2.0",
+    "is_active": true
+  },
+  {
+    "id": "c0000000-0000-0000-0000-000000000010",
+    "policy_id": "e0000000-0000-0000-0000-000000000005",
+    "name": "Structured Logging Enabled",
+    "rule_type": "threshold_eq",
+    "threshold_config": {
+      "data_key": "structured_logging_enabled",
+      "numeric_value": 1,
+      "operator": "eq",
+      "unit": "boolean",
+      "description": "All log output must be structured JSON with correlation IDs"
+    },
+    "severity": "medium",
+    "weight": "1.0",
+    "is_active": true
+  }
+]

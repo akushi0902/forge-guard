@@ -1,0 +1,3 @@
+Review the {dimension} metrics for {service_name} and identify the root cause of the elevated {metric_name}.
+Reduce {metric_name} from its current value of {metric_value} to below the threshold of {threshold} before proceeding with deployment.
+Consult your team's {dimension} standards and guidelines for specific refactoring or remediation approaches.

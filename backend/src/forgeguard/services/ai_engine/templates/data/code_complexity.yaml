@@ -1,0 +1,109 @@
+# Code Complexity Finding Templates
+# Covers the 4 most common code complexity findings
+
+templates:
+  - finding_type: high_cyclomatic_complexity
+    dimension: code_complexity
+    severity_levels:
+      - medium
+      - high
+      - critical
+    explanation_template: >
+      The changes in {service_name} introduce high cyclomatic complexity in {finding_title}.
+      The measured complexity ({actual_value}) exceeds the acceptable threshold ({threshold_value}),
+      meaning this code has many independent execution paths that must each be tested and maintained.
+      High complexity correlates strongly with defect density and makes future refactoring risky.
+    business_impact_template: >
+      Complex code in {service_name} increases the time required for code reviews, onboarding new
+      engineers, and diagnosing production incidents. Each additional complexity point typically
+      doubles the number of test cases required for full coverage. This finding in {finding_title}
+      signals elevated regression risk for this service.
+    remediation_steps:
+      - "Decompose {finding_title} into smaller, single-responsibility functions where each branch represents a clear domain concept."
+      - "Replace nested conditionals with early-return guard clauses to reduce the nesting depth."
+      - "Extract switch/match arms or repetitive if-else blocks into a dispatch table or strategy pattern."
+      - "Add unit tests for every independent path before refactoring to create a safety net."
+      - "Verify the post-refactor complexity score is below {threshold_value} in your static analysis tool."
+    code_examples:
+      - |
+        # Before: deeply nested conditionals (high complexity)
+        def process(x, y, z):
+            if x:
+                if y:
+                    if z:
+                        return "all"
+                    return "xy"
+                return "x"
+            return "none"
+
+        # After: early-return guard clauses (lower complexity)
+        def process(x, y, z):
+            if not x:
+                return "none"
+            if not y:
+                return "x"
+            if not z:
+                return "xy"
+            return "all"
+
+  - finding_type: large_file_change
+    dimension: code_complexity
+    severity_levels:
+      - medium
+      - high
+    explanation_template: >
+      This pull request ({pr_reference}) modifies a large portion of {finding_title} in {service_name}.
+      The change touches {actual_value} lines, which is above the recommended limit of {threshold_value}.
+      Large diffs are harder to review thoroughly, more likely to introduce subtle bugs, and create
+      significant merge conflict surface area for parallel work.
+    business_impact_template: >
+      Large file changes in {service_name} reduce code review effectiveness, as reviewers suffer
+      attention fatigue and are more likely to miss logic errors in sprawling diffs. Deployments
+      with large changesets also carry higher rollback costs if an issue is discovered in production.
+    remediation_steps:
+      - "Split {pr_reference} into smaller, independently deployable pull requests, each changing one concern at a time."
+      - "Separate pure refactoring commits from behavioural changes so reviewers can focus on each in isolation."
+      - "Check whether the size of the change indicates {finding_title} itself needs to be decomposed into smaller modules."
+      - "Use feature flags to ship a large change incrementally, gating new behaviour behind a flag until fully validated."
+
+  - finding_type: excessive_churn
+    dimension: code_complexity
+    severity_levels:
+      - medium
+      - high
+      - critical
+    explanation_template: >
+      {finding_title} in {service_name} has been modified {actual_value} times in recent history,
+      exceeding the churn threshold of {threshold_value}. Excessive churn is a strong signal that
+      this module is either poorly understood, carries hidden complexity, or is a frequent source of
+      defects that require constant correction.
+    business_impact_template: >
+      High churn in {service_name} files increases the risk of merge conflicts, destabilises dependent
+      services, and erodes developer confidence in the module. Frequently churned files account for a
+      disproportionate share of production incidents.
+    remediation_steps:
+      - "Investigate the root cause of repeated changes to {finding_title}: is it carrying too many responsibilities?"
+      - "Review recent commits to identify recurring bug patterns — these often point to missing invariants or unclear ownership."
+      - "Consider adding integration tests that pin the observable behaviour of {finding_title} before the next change."
+      - "Document the intended design contract for {finding_title} to reduce speculative edits."
+      - "If churn is driven by configuration changes, extract configuration from {finding_title} into a dedicated config module."
+
+  - finding_type: deeply_nested_logic
+    dimension: code_complexity
+    severity_levels:
+      - medium
+      - high
+    explanation_template: >
+      The code introduced in {pr_reference} for {service_name} contains logic nested {actual_value}
+      levels deep in {finding_title}, exceeding the recommended nesting depth of {threshold_value}.
+      Deep nesting makes it difficult to reason about which conditions are active at any point and
+      dramatically increases the number of paths that tests must cover.
+    business_impact_template: >
+      Deeply nested logic in {service_name} is a primary driver of defect escape rates. Reviewers
+      struggle to verify all conditional branches, and incorrect assumptions about nesting scope
+      are a common source of data-corruption and security bugs.
+    remediation_steps:
+      - "Flatten nesting in {finding_title} using early returns or guard clauses for precondition checks."
+      - "Extract each major nested block into a named helper function that communicates its intent clearly."
+      - "Convert repetitive nested loops over collections into comprehensions, generators, or higher-order functions."
+      - "Use structured patterns (dataclasses, named tuples) to carry related state instead of deeply nested dicts."

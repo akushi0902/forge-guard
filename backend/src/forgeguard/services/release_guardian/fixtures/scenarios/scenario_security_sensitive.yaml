@@ -1,0 +1,55 @@
+name: security_sensitive_change
+description: "Security-sensitive change: config file with secret-like patterns in added lines"
+
+commit_sha: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+pr_reference: "55"
+
+files:
+  - filename: "src/payments/config.py"
+    status: modified
+    additions: 8
+    deletions: 2
+    is_binary: false
+    patch: |
+      @@ -1,5 +1,11 @@
+       # Payment processor configuration
+      -STRIPE_KEY = ""
+      +STRIPE_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+      +PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_CLIENT_ID", "")
+      +PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_CLIENT_SECRET", "")
+      +
+      +# Development fallback - DO NOT use in production
+      +if os.environ.get("ENV") == "test":
+      +    api_key = "sk_test_placeholder_key_for_testing"
+      +    secret_key = "test_secret_12345678"
+
+  - filename: "src/payments/database.py"
+    status: modified
+    additions: 15
+    deletions: 5
+    is_binary: false
+    patch: |
+      @@ -1,10 +1,20 @@
+      +def get_users(filter_name):
+      +    query = "SELECT * FROM users WHERE name = '" + filter_name + "'"
+      +    cursor.execute(query)
+      +    return cursor.fetchall()
+      +
+      +def get_payments(user_id):
+      +    cursor.execute(f"SELECT * FROM payments WHERE user_id = {user_id}")
+      +    return cursor.fetchall()
+
+  - filename: "src/payments/serializer.py"
+    status: modified
+    additions: 4
+    deletions: 1
+    is_binary: false
+    patch: |
+      @@ -1,5 +1,8 @@
+      +def deserialize_payment(data):
+      +    return pickle.loads(data)
+      +
+      +def load_config(config_bytes):
+      +    return pickle.loads(config_bytes)
+
+dependency_manifests: []
