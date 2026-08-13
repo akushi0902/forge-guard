@@ -210,6 +210,18 @@ class Settings(BaseSettings):
             "Must NEVER appear in logs or error responses."
         ),
     )
+    forge_workflow_url: str = Field(
+        default="https://forge.example.com/workflow",
+        description="Base URL of the Forge Workflow Engine API (WO-092).",
+    )
+    forge_workflow_api_key: str = Field(
+        default="",
+        description=(
+            "API key for the Forge Workflow Engine API. "
+            "Injected via X-Forge-Api-Key header. "
+            "Must NEVER appear in logs or error responses."
+        ),
+    )
 
     # ------------------------------------------------------------------ #
     # CORS

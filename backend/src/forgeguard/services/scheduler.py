@@ -147,6 +147,16 @@ class SchedulerService:
             misfire_grace_time=900,
         )
 
+        # Every 60 seconds — poll active Forge Workflow statuses (WO-092).
+        scheduler.add_job(
+            _run_workflow_status_polling,
+            IntervalTrigger(seconds=60, timezone="UTC"),
+            id="workflow_status_polling",
+            name="Forge Workflow Status Polling",
+            replace_existing=True,
+            misfire_grace_time=60,
+        )
+
         scheduler.start()
         self._scheduler = scheduler
         logger.info("scheduler.started", job_count=len(scheduler.get_jobs()))
@@ -282,6 +292,34 @@ async def _run_decision_assignment_expiry() -> None:
         logger.error(
             "scheduler.job.failed",
             job="decision_assignment_expiry",
+            error=str(exc),
+        )
+
+
+async def _run_workflow_status_polling() -> None:
+    """Every-60-second job: poll active Forge Workflow statuses (WO-092)."""
+    try:
+        from forgeguard.core.dependencies import get_workflow_adapter  # noqa: PLC0415
+        from forgeguard.data.database import get_pool  # noqa: PLC0415
+        from forgeguard.data.repositories.audit_logs import AuditLogRepository  # noqa: PLC0415
+        from forgeguard.data.repositories.decisions import DecisionRepository  # noqa: PLC0415
+        from forgeguard.services.audit import AuditService  # noqa: PLC0415
+        from forgeguard.services.forge_workflow import poll_active_workflows  # noqa: PLC0415
+
+        pool = await get_pool()
+        decision_repo = DecisionRepository(pool)
+        audit_svc = AuditService(AuditLogRepository(pool))
+        adapter = get_workflow_adapter()
+
+        await poll_active_workflows(
+            adapter=adapter,
+            decision_repo=decision_repo,
+            audit_svc=audit_svc,
+        )
+    except Exception as exc:
+        logger.error(
+            "scheduler.job.failed",
+            job="workflow_status_polling",
             error=str(exc),
         )
 

@@ -236,6 +236,38 @@ def get_forge_catalog_adapter():
     return ForgeCatalogHttpAdapter(client=client)
 
 
+# Module-level singleton — created once on first call, reused thereafter.
+_workflow_adapter_instance = None
+
+
+def get_workflow_adapter():
+    """Return the singleton :class:`~forgeguard.services.forge_workflow.ForgeWorkflowHttpAdapter`.
+
+    Shares the circuit breaker state across all requests.  The API key is read
+    from Settings at construction time and is NEVER logged or exposed in errors.
+
+    Returns:
+        A fully configured :class:`~forgeguard.services.forge_workflow.ForgeWorkflowHttpAdapter`.
+    """
+    global _workflow_adapter_instance
+    if _workflow_adapter_instance is None:
+        from forgeguard.services.ai_engine.circuit_breaker import CircuitBreaker  # noqa: PLC0415
+        from forgeguard.services.forge_workflow import ForgeWorkflowHttpAdapter  # noqa: PLC0415
+
+        settings = get_settings()
+        circuit_breaker = CircuitBreaker(
+            failure_threshold=settings.circuit_breaker_failure_threshold,
+            window_seconds=settings.circuit_breaker_window_seconds,
+            recovery_timeout=settings.circuit_breaker_recovery_seconds,
+        )
+        _workflow_adapter_instance = ForgeWorkflowHttpAdapter(
+            base_url=settings.forge_workflow_url,
+            api_key=settings.forge_workflow_api_key,
+            circuit_breaker=circuit_breaker,
+        )
+    return _workflow_adapter_instance
+
+
 __all__ = [
     "SettingsDep",
     "get_settings",
@@ -255,4 +287,5 @@ __all__ = [
     "get_release_assessment_repo",
     "get_assessment_score_repo",
     "get_forge_catalog_adapter",
+    "get_workflow_adapter",
 ]
