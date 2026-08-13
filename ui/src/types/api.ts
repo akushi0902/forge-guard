@@ -151,6 +151,52 @@ export interface RemediationRecommendation {
   confidence_score: number;
 }
 
+/**
+ * Extended finding type with AI explanation and remediation metadata.
+ * Returned by GET /api/v1/findings/{id}.
+ */
+export interface FindingDetail extends Finding {
+  ai_explanation: string | null;
+  evidence: string | null;
+  escalation_required: boolean;
+  resolved_at: string | null;
+}
+
+/**
+ * Extended recommendation including business impact and source metadata.
+ * Returned by GET /api/v1/findings/{id}/recommendation.
+ */
+export interface FindingRecommendation extends RemediationRecommendation {
+  business_impact: string | null;
+  source: string;
+  created_at: string;
+}
+
+/** Single rule result from a re-evaluation pass. */
+export interface RuleResult {
+  rule_id: string;
+  rule_name: string;
+  passed: boolean;
+  actual_value: string;
+  threshold: string;
+}
+
+/**
+ * Result of POST /api/v1/findings/{id}/re-evaluate.
+ * Contains before/after health score comparison.
+ */
+export interface ReEvaluationResult {
+  finding_id: string;
+  before_health_score: number | null;
+  after_health_score: number;
+  score_delta: number | null;
+  before_finding_status: string;
+  after_finding_status: string;
+  rule_results: RuleResult[];
+  updated_guidance: string | null;
+  re_evaluated_at: string;
+}
+
 // --------------------------------------------------------------------------
 // Releases
 // --------------------------------------------------------------------------

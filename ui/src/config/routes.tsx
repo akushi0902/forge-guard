@@ -184,6 +184,7 @@ const IntegrationsPage = lazy(() => import('@/pages/IntegrationsPage').then((m) 
 const ReleaseAssessmentRequestPage = lazy(() => import('@/pages/ReleaseAssessmentRequestPage').then((m) => ({ default: m.ReleaseAssessmentRequestPage })));
 const ReleaseDecisionReviewPage = lazy(() => import('@/pages/ReleaseDecisionReviewPage').then((m) => ({ default: m.ReleaseDecisionReviewPage })));
 const SecurityReviewPage = lazy(() => import('@/pages/SecurityReview').then((m) => ({ default: m.SecurityReview })));
+const RemediationDetailPage = lazy(() => import('@/pages/RemediationDetail').then((m) => ({ default: m.RemediationDetail })));
 
 // ---------------------------------------------------------------------------
 // Guarded route helper
@@ -257,6 +258,10 @@ export const router = createBrowserRouter([
           {
             path: 'remediation',
             element: guarded('finding:read', <RemediationPage />),
+          },
+          {
+            path: 'findings/:findingId',
+            element: guarded('finding:read', <RemediationDetailPage />),
           },
           {
             path: 'approvals',
