@@ -222,6 +222,22 @@ class Settings(BaseSettings):
             "Must NEVER appear in logs or error responses."
         ),
     )
+    forge_scorecard_url: str = Field(
+        default="https://forge.example.com/scorecard",
+        description="Base URL of the Forge Scorecard API (WO-090).",
+    )
+    forge_scorecard_api_key: str = Field(
+        default="",
+        description=(
+            "API key for the Forge Scorecard API. "
+            "Injected via X-Forge-Api-Key header. "
+            "Must NEVER appear in logs, audit records, or error responses."
+        ),
+    )
+    scorecard_sync_poll_interval_seconds: int = Field(
+        default=30,
+        description="Interval in seconds for the background sync queue processor.",
+    )
 
     # ------------------------------------------------------------------ #
     # CORS

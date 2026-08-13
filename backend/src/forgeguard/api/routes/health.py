@@ -44,6 +44,8 @@ from forgeguard.data.repositories.services import ServiceRepository
 from forgeguard.services.assessment_orchestrator import AssessmentOrchestrator
 from forgeguard.services.audit import AuditService
 from forgeguard.services.mock_data_collector import MockDataCollector
+from forgeguard.services.forge_scorecard import ForgeScorecardHttpAdapter
+from forgeguard.services.sync_queue import SyncQueueService
 
 logger = structlog.get_logger(__name__)
 
@@ -80,12 +82,23 @@ async def get_policy_repo(pool: asyncpg.Pool = Depends(get_pool)) -> PolicyRepos
 
 
 async def get_orchestrator(
+    pool: asyncpg.Pool = Depends(get_pool),
     assessment_repo: AssessmentRepository = Depends(get_assessment_repo),
     policy_repo: PolicyRepository = Depends(get_policy_repo),
     score_repo: ScoreRepository = Depends(get_score_repo),
     finding_repo: FindingRepository = Depends(get_finding_repo),
+    service_repo: ServiceRepository = Depends(get_service_repo),
     audit_svc: AuditService = Depends(get_audit_service),
 ) -> AssessmentOrchestrator:
+    from forgeguard.core.config import get_settings  # noqa: PLC0415
+    settings = get_settings()
+    scorecard_adapter: ForgeScorecardHttpAdapter | None = None
+    if settings.forge_scorecard_api_key:
+        scorecard_adapter = ForgeScorecardHttpAdapter(
+            base_url=settings.forge_scorecard_url,
+            api_key=settings.forge_scorecard_api_key,
+        )
+    sync_queue = SyncQueueService(pool)
     return AssessmentOrchestrator(
         assessment_repo=assessment_repo,
         policy_repo=policy_repo,
@@ -93,6 +106,9 @@ async def get_orchestrator(
         finding_repo=finding_repo,
         data_collector=MockDataCollector(),
         audit_svc=audit_svc,
+        scorecard_adapter=scorecard_adapter,
+        sync_queue=sync_queue,
+        service_repo=service_repo,
     )
 
 
@@ -292,6 +308,8 @@ async def get_service_scores(
     finding_counts = await finding_repo.count_by_severity(service_id)
 
     overall = score_row.get("overall_score")
+    scorecard_sync_status = score_row.get("forge_sync_status", "pending")
+    last_scorecard_sync_at = score_row.get("last_scorecard_sync_at")
 
     return HealthScoreResponse(
         service_id=service_id,
@@ -301,6 +319,9 @@ async def get_service_scores(
         finding_counts=finding_counts,
         last_evaluated_at=score_row.get("created_at"),
         message=None,
+        forge_scorecard_stale=(scorecard_sync_status == "stale"),
+        last_scorecard_sync_at=last_scorecard_sync_at,
+        scorecard_sync_status=scorecard_sync_status,
     )
 
 

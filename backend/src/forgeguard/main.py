@@ -88,7 +88,59 @@ async def lifespan(app: FastAPI):
         scheduler = SchedulerService(settings)
         scheduler.start()
 
+    # ── Forge Scorecard sync queue background processor (WO-090) ─────────
+    import asyncio  # noqa: PLC0415
+    _sync_task: asyncio.Task | None = None  # type: ignore[type-arg]
+    if settings.forge_scorecard_api_key:
+        from forgeguard.services.forge_scorecard import ForgeScorecardHttpAdapter  # noqa: PLC0415
+        from forgeguard.services.sync_queue import SyncQueueService  # noqa: PLC0415
+
+        _scorecard_adapter = ForgeScorecardHttpAdapter(
+            base_url=settings.forge_scorecard_url,
+            api_key=settings.forge_scorecard_api_key,
+        )
+        _sync_queue_svc = SyncQueueService(await get_pool())
+
+        async def _run_sync_queue_loop() -> None:
+            poll_interval = settings.scorecard_sync_poll_interval_seconds
+            while True:
+                try:
+                    await asyncio.sleep(poll_interval)
+                    async def _handler(payload: dict) -> dict:  # type: ignore[type-arg]
+                        import uuid as _uuid  # noqa: PLC0415
+                        from datetime import datetime as _dt, timezone as _tz  # noqa: PLC0415
+                        assessed_at_str = payload.get("assessed_at", "")
+                        try:
+                            assessed_at = _dt.fromisoformat(assessed_at_str)
+                        except ValueError:
+                            assessed_at = _dt.now(tz=_tz.utc)
+                        return await _scorecard_adapter.publish_score(
+                            scorecard_id=payload["scorecard_id"],
+                            service_id=_uuid.UUID(payload["service_id"]),
+                            assessment_id=_uuid.UUID(payload["assessment_id"]),
+                            overall_score=float(payload["overall_score"]),
+                            dimension_scores=payload.get("dimension_scores", {}),
+                            assessed_at=assessed_at,
+                        )
+                    processed = await _sync_queue_svc.process_pending_jobs(_handler)
+                    if processed:
+                        logger.info("scorecard_sync_queue.processed", count=processed)
+                except asyncio.CancelledError:
+                    break
+                except Exception as exc:
+                    logger.error("scorecard_sync_queue.poll_error", error=str(exc))
+
+        _sync_task = asyncio.create_task(_run_sync_queue_loop())
+        logger.info("scorecard_sync_queue.started", poll_interval=settings.scorecard_sync_poll_interval_seconds)
+
     yield
+
+    if _sync_task is not None:
+        _sync_task.cancel()
+        try:
+            await _sync_task
+        except asyncio.CancelledError:
+            pass
 
     if scheduler is not None:
         scheduler.shutdown(wait=True)

@@ -45,6 +45,11 @@ class HealthScoreResponse(ForgeGuardBaseModel):
 
     Returns the most recent health score for the service, or nulls with an
     informational message when no assessments have been run.
+
+    Scorecard sync fields (WO-090):
+      forge_scorecard_stale      — True when all publish retries have been exhausted.
+      last_scorecard_sync_at     — ISO8601 timestamp of last successful publish, or null.
+      scorecard_sync_status      — 'synced'|'pending'|'failed'|'stale'|'blocked_no_catalog_id'.
     """
 
     service_id: uuid.UUID
@@ -54,6 +59,10 @@ class HealthScoreResponse(ForgeGuardBaseModel):
     finding_counts: dict[str, int] = {}
     last_evaluated_at: Optional[datetime] = None
     message: Optional[str] = None
+    # Forge Scorecard sync status (WO-090)
+    forge_scorecard_stale: bool = False
+    last_scorecard_sync_at: Optional[datetime] = None
+    scorecard_sync_status: Optional[str] = None
 
 
 class FindingDetailResponse(ForgeGuardBaseModel):
