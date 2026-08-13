@@ -10,7 +10,8 @@
  *     /findings                   — finding:read
  *     /remediation                — finding:read
  *     /approvals                  — assessment:write | assessment:approve
- *     /security                   — security:review
+ *     /security                   — release.block (SecurityReview page)
+ *     /security-review            — release.block (SecurityReview page alias)
  *     /escalations                — finding:escalate
  *     /ai-agent                   — service:read
  *     /audit                      — service:read
@@ -166,7 +167,6 @@ const ReleasesPage    = lazy(() => import('@/pages/ReleasesPage').then((m) => ({
 const FindingsPage    = lazy(() => import('@/pages/FindingsPage').then((m) => ({ default: m.FindingsPage })));
 const RemediationPage = lazy(() => import('@/pages/RemediationPage').then((m) => ({ default: m.RemediationPage })));
 const ApprovalsPage   = lazy(() => import('@/pages/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })));
-const SecurityPage    = lazy(() => import('@/pages/SecurityPage').then((m) => ({ default: m.SecurityPage })));
 const EscalationsPage = lazy(() => import('@/pages/EscalationsPage').then((m) => ({ default: m.EscalationsPage })));
 const AiAgentPage     = lazy(() => import('@/pages/AiAgentPage').then((m) => ({ default: m.AiAgentPage })));
 const AuditPage       = lazy(() => import('@/pages/AuditPage').then((m) => ({ default: m.AuditPage })));
@@ -183,6 +183,7 @@ const UsersPage       = lazy(() => import('@/pages/UsersPage').then((m) => ({ de
 const IntegrationsPage = lazy(() => import('@/pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })));
 const ReleaseAssessmentRequestPage = lazy(() => import('@/pages/ReleaseAssessmentRequestPage').then((m) => ({ default: m.ReleaseAssessmentRequestPage })));
 const ReleaseDecisionReviewPage = lazy(() => import('@/pages/ReleaseDecisionReviewPage').then((m) => ({ default: m.ReleaseDecisionReviewPage })));
+const SecurityReviewPage = lazy(() => import('@/pages/SecurityReview').then((m) => ({ default: m.SecurityReview })));
 
 // ---------------------------------------------------------------------------
 // Guarded route helper
@@ -263,7 +264,11 @@ export const router = createBrowserRouter([
           },
           {
             path: 'security',
-            element: guarded('security:review', <SecurityPage />),
+            element: guarded('release.block', <SecurityReviewPage />),
+          },
+          {
+            path: 'security-review',
+            element: guarded('release.block', <SecurityReviewPage />),
           },
           {
             path: 'escalations',
