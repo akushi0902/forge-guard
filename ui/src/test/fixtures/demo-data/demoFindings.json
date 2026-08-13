@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "id": "finding-demo-001",
+      "service_id": "svc-demo-payment-001",
+      "title": "Missing test coverage for payment processing module",
+      "description": "Test coverage for the core payment module is below the 80% threshold.",
+      "severity": "high",
+      "dimension": "test_coverage",
+      "status": "open",
+      "created_at": "2026-08-13T10:00:00Z",
+      "is_demo": true
+    },
+    {
+      "id": "finding-demo-002",
+      "service_id": "svc-demo-payment-001",
+      "title": "Outdated dependency with known CVE",
+      "description": "Dependency lodash@4.17.20 has a known prototype pollution vulnerability.",
+      "severity": "critical",
+      "dimension": "security",
+      "status": "open",
+      "created_at": "2026-08-13T10:00:00Z",
+      "is_demo": true
+    }
+  ],
+  "cursor": null,
+  "total_count": 2
+}

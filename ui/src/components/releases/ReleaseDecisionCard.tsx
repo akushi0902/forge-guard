@@ -13,6 +13,8 @@
 
 import { Alert, Box, Button, Card, Group, Stack, Text, Textarea, Title } from '@mantine/core';
 import { useState, type JSX } from 'react';
+import { useDemoContext } from '@/hooks/useDemoContext';
+import { MockDataBadge } from '@/components/common/MockDataBadge';
 
 const RATIONALE_MIN = 10;
 const RATIONALE_MAX = 2000;
@@ -47,6 +49,7 @@ export function ReleaseDecisionCard({
 }: ReleaseDecisionCardProps): JSX.Element {
   const [rationale, setRationale] = useState('');
   const [comment, setComment] = useState('');
+  const { isDemo } = useDemoContext();
 
   const canApprove = permissions.includes('release.approve');
   const canBlock   = permissions.includes('release.block');
@@ -62,7 +65,10 @@ export function ReleaseDecisionCard({
     return (
       <Card withBorder radius="md" p="md" data-testid="decision-card-readonly">
         <Stack gap="sm">
-          <Title order={4}>Release Decision</Title>
+          <Group justify="space-between" align="center">
+            <Title order={4}>Release Decision</Title>
+            {isDemo && <MockDataBadge label="Demo Mode" />}
+          </Group>
           <Alert color="gray" variant="light" data-testid="no-permission-message">
             You do not have permission to make release decisions.
           </Alert>
@@ -74,7 +80,10 @@ export function ReleaseDecisionCard({
   return (
     <Card withBorder radius="md" p="md" data-testid="decision-card">
       <Stack gap="md">
-        <Title order={4}>Submit Release Decision</Title>
+        <Group justify="space-between" align="center">
+          <Title order={4}>Submit Release Decision</Title>
+          {isDemo && <MockDataBadge label="Demo Mode" />}
+        </Group>
 
         {/* Rationale — required */}
         <Box>

@@ -616,3 +616,10 @@
 - **Files:** 2 (+69/-2)
 - **Duration:** 555ss
 - **Approach:** All dashboard sub-components (DimensionBar, HealthScoreCard, StatsGrid, FindingsCard, EmptyStateCard), the DeveloperDashboard page, fixtures, tests, and the /dashboard route were already present in the branch from the dependency WOs (WOREF-068, WOREF-070, WOREF-071). The single gap was that HealthScoreCard forwarded no color prop to ScoreRing, so the shared ScoreRing's built-in threshold (green ≥ 80) was used instead of the AC-2 specification (green ≥ 70, amber 50–69, red < 50). Fixed by adding an exported healthScoreColor() helper with the correct thresholds and passing the result as the color prop. Added 10 unit tests covering all three color bands and every boundary value.
+
+## WO-085: User Story: WO-085 - Implement Empty States with Onboarding Guidance
+- **Status:** completed
+- **Commit:** `f7ba4a9`
+- **Files:** 28 (+882/-14)
+- **Duration:** 701ss
+- **Approach:** Built a reusable EmptyState base component (Mantine Paper + Stack + List + Button) with a typed EmptyStateProps interface supporting illustration (ReactNode), title, description, optional onboarding steps, and a ctaAction union type (function | string) that renders either an onClick button or an anchor tag. Created five lightweight SVG illustration components using useMantineTheme() for color tokens with aria-hidden='true'. Created five view-specific wrapper components that pre-configure EmptyState with contextual content and steps. Integrated each wrapper into the corresponding page using conditional rendering: empty state shown when the API response succeeds with zero items (or no score data). Added 5 empty-API JSON fixtures and 36 Vitest + Testing Library unit tests across 6 test files. Omitted axe-core (not installed) and used @testing-library/jest-dom matchers for accessibility assertions instead.

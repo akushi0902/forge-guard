@@ -1,0 +1,9 @@
+{
+  "id": "svc-demo-payment-001",
+  "name": "Payment Service (Demo)",
+  "description": "Pre-configured demo service for ForgeGuard demonstrations.",
+  "repository_url": "https://github.com/example/payment-service",
+  "health_score": 62,
+  "last_evaluated_at": "2026-08-13T10:00:00Z",
+  "is_demo": true
+}
