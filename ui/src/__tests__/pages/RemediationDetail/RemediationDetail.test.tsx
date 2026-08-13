@@ -21,6 +21,7 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from 'vitest';
 import {
   screen,
@@ -49,8 +50,35 @@ import { ConfidenceMeter } from '@/pages/RemediationDetail/components/Confidence
 import { CodeBlock } from '@/pages/RemediationDetail/components/CodeBlock';
 import { RemediationSteps, parseRemediationGuide } from '@/pages/RemediationDetail/components/RemediationSteps';
 
+// ---------------------------------------------------------------------------
+// Mock react-router-dom so we can supply URL params
+// ---------------------------------------------------------------------------
+
+/**
+ * Mutable reference for useParams — allows per-test override via
+ * renderWithFindingId(id). Must be an object (not a primitive) so the
+ * factory closure captures it by reference, not by value.
+ */
+const routeParams: { findingId: string } = { findingId: CRITICAL_FINDING_DETAIL.id };
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return {
+    ...actual,
+    useParams: () => routeParams,
+  };
+});
+
+// ---------------------------------------------------------------------------
+// MSW lifecycle
+// ---------------------------------------------------------------------------
+
 beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
-afterEach(() => server.resetHandlers());
+afterEach(() => {
+  server.resetHandlers();
+  // Reset params back to the default finding after each test
+  routeParams.findingId = CRITICAL_FINDING_DETAIL.id;
+});
 afterAll(() => server.close());
 
 // ---------------------------------------------------------------------------
@@ -58,11 +86,8 @@ afterAll(() => server.close());
 // ---------------------------------------------------------------------------
 
 function renderWithFindingId(findingId = CRITICAL_FINDING_DETAIL.id) {
-  return render(<RemediationDetail />, {
-    routerProps: {
-      initialEntries: [`/findings/${findingId}`],
-    },
-  });
+  routeParams.findingId = findingId;
+  return render(<RemediationDetail />);
 }
 
 function setupHandlers(

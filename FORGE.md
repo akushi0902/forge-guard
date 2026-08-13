@@ -630,3 +630,17 @@
 - **Files:** 2 (+95/-98)
 - **Duration:** 600ss
 - **Approach:** The core WO-053 infrastructure (migration, ORM model, repository, DecisionRouter service, scheduler expiry job, unit tests, integration tests, fixtures) was already committed to the branch by prior WOs. This implementation fixed three correctness issues that made the feature non-functional: (1) the GET /pending and GET /admin/pending routes were registered AFTER the parametric GET /{id} route — FastAPI evaluates routes in definition order, so /pending would be silently captured by /{id} returning 422; (2) DecisionAssignmentRepository was only imported inside function bodies, but the integration tests patch it at 'forgeguard.api.routes.releases.DecisionAssignmentRepository' (module-level) — without a module-level import the patch was a no-op and tests would hit real code paths; (3) the admin endpoint was registered at /api/v1/releases/admin/pending instead of the spec-required /api/v1/admin/releases/pending. Fixed by: moving DecisionAssignmentRepository to module-level import, inserting /pending and admin_releases_router.get(/pending) before the /{id} route, creating a dedicated admin_releases_router with prefix /api/v1/admin/releases, and registering it in main.py.
+
+## WO-082: User Story: WO-082 - Remediation Detail with AI Recommendations View
+- **Status:** completed
+- **Commit:** `153bd3a`
+- **Files:** 1 (+31/-6)
+- **Duration:** 648ss
+- **Approach:** All WO-082 implementation files were already present in the repository (created by prior WOs). The test file had a critical gap: it used MemoryRouter with initialEntries but never set up a <Route> with the /findings/:findingId path pattern, so useParams() always returned {} — causing disabled queries and no data load. Fixed by adding vi.mock('react-router-dom') to mock useParams with a mutable routeParams object, allowing per-test findingId override. Also updated afterEach to reset routeParams to the default ID between tests, preventing leakage.
+
+## WO-084: User Story: WO-084 - AI Agent Natural Language Chat Interface
+- **Status:** completed
+- **Commit:** `10a1fbf`
+- **Files:** 19 (+1524/-0)
+- **Duration:** 791ss
+- **Approach:** Built a full-page AI Agent chat interface at /agent/chat using Zustand for optimistic message state, TanStack Query mutations for the POST /api/v1/agent/query endpoint, and a component tree that separates ConversationSidebar from ChatArea (ChatHeader + ChatBody + ChatInputRow + MessageBubble + ContextualCard). A floating AIChatFAB (fixed, z-index 1000) uses a Mantine Drawer (AIChatPanel) to expose the same chat on any page. Credential sanitization via regex is applied to every agent response before rendering. LLM unavailability (503) is caught in the mutation onError handler and converted to a template fallback message with is_template_fallback=true, surfaced as a 'Limited mode' badge on the agent bubble.

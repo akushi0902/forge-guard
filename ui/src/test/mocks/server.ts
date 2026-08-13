@@ -10,6 +10,7 @@
 
 import { setupServer } from 'msw/node';
 
+import { agentHandlers } from './handlers/agentHandlers';
 import { authHandlers } from './handlers/auth';
 import { findingHandlers } from './handlers/findings';
 import { healthHandlers } from './handlers/health';
@@ -34,4 +35,5 @@ export const server = setupServer(
   ...managerHandlers,
   ...securityHandlers,
   ...remediationHandlers,
+  ...agentHandlers,
 );
