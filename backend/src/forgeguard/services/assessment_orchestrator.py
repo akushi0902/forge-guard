@@ -42,6 +42,8 @@ from forgeguard.services.evaluation_engine import RuleEvaluationEngine
 from forgeguard.services.finding_generator import FindingGenerator
 from forgeguard.services.health_score_aggregator import DEFAULT_WEIGHTS, HealthScoreAggregator
 from forgeguard.services.interfaces.data_collector import DataCollector
+from forgeguard.services.forge_scorecard import ForgeScorecardAdapter, ScorecardSyncStatus
+from forgeguard.services.sync_queue import SyncQueueService
 
 logger = structlog.get_logger(__name__)
 
@@ -110,6 +112,9 @@ class AssessmentOrchestrator:
         evaluation_engine: RuleEvaluationEngine | None = None,
         dim_scorer: DimensionScoreCalculator | None = None,
         health_aggregator: HealthScoreAggregator | None = None,
+        scorecard_adapter: ForgeScorecardAdapter | None = None,
+        sync_queue: SyncQueueService | None = None,
+        service_repo: Any = None,
     ) -> None:
         self._assessments = assessment_repo
         self._policies = policy_repo
@@ -120,6 +125,9 @@ class AssessmentOrchestrator:
         self._engine = evaluation_engine or RuleEvaluationEngine()
         self._dim_scorer = dim_scorer or DimensionScoreCalculator()
         self._aggregator = health_aggregator or HealthScoreAggregator()
+        self._scorecard_adapter: ForgeScorecardAdapter | None = scorecard_adapter
+        self._sync_queue: SyncQueueService | None = sync_queue
+        self._service_repo = service_repo
 
     async def run(
         self,
@@ -190,6 +198,14 @@ class AssessmentOrchestrator:
                 error=str(exc),
             )
             raise
+
+        # ── Step 10: publish to Forge Scorecard (fire-and-forget) ────────────
+        if self._scorecard_adapter is not None and result.overall_score is not None:
+            await self._publish_scorecard(
+                assessment_id=assessment_id,
+                service_id=service_id,
+                result=result,
+            )
 
         # ── Final audit record ────────────────────────────────────────────────
         await self._emit_audit(
@@ -302,6 +318,134 @@ class AssessmentOrchestrator:
             message=None,
             findings=findings,
         )
+
+    async def _publish_scorecard(
+        self,
+        assessment_id: uuid.UUID,
+        service_id: uuid.UUID,
+        result: AssessmentResult,
+    ) -> None:
+        """Attempt to publish the health score to Forge Scorecard.
+
+        Fire-and-forget: failures are enqueued for retry and never propagate
+        to the caller. The assessment response is not delayed.
+        """
+        log = logger.bind(
+            assessment_id=str(assessment_id),
+            service_id=str(service_id),
+        )
+
+        # Look up forge_catalog_id (scorecard_id) from the service record.
+        scorecard_id: str | None = None
+        if self._service_repo is not None:
+            try:
+                svc = await self._service_repo.get_by_id(service_id)
+                scorecard_id = str(svc.get("forge_catalog_id")) if svc and svc.get("forge_catalog_id") else None
+            except Exception as exc:
+                log.warning("assessment_orchestrator.scorecard_service_lookup_failed", error=str(exc))
+
+        if not scorecard_id:
+            log.warning(
+                "assessment_orchestrator.scorecard_skipped_no_catalog_id",
+                sync_status=ScorecardSyncStatus.BLOCKED_NO_CATALOG_ID,
+            )
+            try:
+                await self._scores.update_forge_sync_status(
+                    assessment_id=assessment_id,
+                    status=ScorecardSyncStatus.BLOCKED_NO_CATALOG_ID,
+                )
+            except Exception:
+                pass
+            return
+
+        # Build dimension_scores payload (dict of dim_name → {score, weight}).
+        dim_payload: dict[str, Any] = {}
+        for dim_name, ds in result.dimension_scores.items():
+            if hasattr(ds, "score"):
+                dim_payload[dim_name] = {
+                    "score": float(ds.score) if ds.score is not None else None,
+                    "weight": float(getattr(ds, "weight", 1.0) or 1.0),
+                }
+
+        evaluated_at = result.evaluated_at
+
+        log.info("assessment_orchestrator.scorecard_publish_started", scorecard_id=scorecard_id)
+
+        try:
+            publish_result = await self._scorecard_adapter.publish_score(  # type: ignore[union-attr]
+                scorecard_id=scorecard_id,
+                service_id=service_id,
+                assessment_id=assessment_id,
+                overall_score=float(result.overall_score),  # type: ignore[arg-type]
+                dimension_scores=dim_payload,
+                assessed_at=evaluated_at,
+            )
+        except Exception as exc:
+            publish_result = {"success": False, "retryable": True, "error": str(exc)}
+
+        if publish_result.get("success"):
+            log.info("assessment_orchestrator.scorecard_publish_succeeded", scorecard_id=scorecard_id)
+            try:
+                await self._scores.update_forge_sync_status(
+                    assessment_id=assessment_id,
+                    status=ScorecardSyncStatus.SYNCED,
+                )
+            except Exception:
+                pass
+            await self._audit_scorecard("scorecard_publish_succeeded", assessment_id, service_id)
+        else:
+            error_msg = publish_result.get("error", "unknown")
+            retryable = publish_result.get("retryable", False)
+            log.warning(
+                "assessment_orchestrator.scorecard_publish_failed",
+                scorecard_id=scorecard_id,
+                error=error_msg,
+                retryable=retryable,
+            )
+            if retryable and self._sync_queue is not None:
+                await self._sync_queue.enqueue_job(
+                    payload={
+                        "assessment_id": str(assessment_id),
+                        "service_id": str(service_id),
+                        "scorecard_id": scorecard_id,
+                        "overall_score": float(result.overall_score),  # type: ignore[arg-type]
+                        "dimension_scores": dim_payload,
+                        "assessed_at": evaluated_at.isoformat(),
+                    }
+                )
+                log.info("assessment_orchestrator.scorecard_enqueued_for_retry")
+            else:
+                try:
+                    await self._scores.update_forge_sync_status(
+                        assessment_id=assessment_id,
+                        status=ScorecardSyncStatus.FAILED,
+                    )
+                except Exception:
+                    pass
+            await self._audit_scorecard("scorecard_publish_failed", assessment_id, service_id, error=error_msg)
+
+    async def _audit_scorecard(
+        self,
+        action: str,
+        assessment_id: uuid.UUID,
+        service_id: uuid.UUID,
+        *,
+        error: str | None = None,
+    ) -> None:
+        try:
+            after: dict[str, Any] = {"assessment_id": str(assessment_id)}
+            if error:
+                after["error"] = error
+            await self._audit.log_event(
+                actor_id=None,
+                actor_role="system",
+                action=action,
+                resource_type="assessment_scores",
+                resource_id=service_id,
+                after_state=after,
+            )
+        except Exception as exc:
+            logger.warning("assessment_orchestrator.scorecard_audit_failed", error=str(exc))
 
     async def _emit_audit(
         self,

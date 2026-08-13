@@ -193,3 +193,21 @@ class ScoreRepository(BaseRepository):
     ) -> dict[str, Any]:
         """Insert an AssessmentScore record including dimension_scores JSONB."""
         return await self.create(data)
+
+    async def update_forge_sync_status(
+        self,
+        *,
+        assessment_id: uuid.UUID,
+        status: str,
+    ) -> None:
+        """Update forge_sync_status (and last_scorecard_sync_at when synced) on assessment_scores."""
+        now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+        q = """
+            UPDATE assessment_scores
+            SET forge_sync_status = $1,
+                last_scorecard_sync_at = CASE WHEN $1 = 'synced' THEN $2 ELSE last_scorecard_sync_at END,
+                updated_at = $2
+            WHERE assessment_id = $3
+        """
+        async with self._pool.acquire() as conn:
+            await conn.execute(q, status, now, assessment_id)

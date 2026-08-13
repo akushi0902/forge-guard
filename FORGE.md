@@ -644,3 +644,10 @@
 - **Files:** 19 (+1524/-0)
 - **Duration:** 791ss
 - **Approach:** Built a full-page AI Agent chat interface at /agent/chat using Zustand for optimistic message state, TanStack Query mutations for the POST /api/v1/agent/query endpoint, and a component tree that separates ConversationSidebar from ChatArea (ChatHeader + ChatBody + ChatInputRow + MessageBubble + ContextualCard). A floating AIChatFAB (fixed, z-index 1000) uses a Mantine Drawer (AIChatPanel) to expose the same chat on any page. Credential sanitization via regex is applied to every agent response before rendering. LLM unavailability (503) is caught in the mutation onError handler and converted to a template fallback message with is_template_fallback=true, surfaced as a 'Limited mode' badge on the agent bubble.
+
+## WO-090: User Story: WO-090 - Forge Scorecard Health Score Publishing with Retry
+- **Status:** completed
+- **Commit:** `a594b60`
+- **Files:** 13 (+1888/-0)
+- **Duration:** 811ss
+- **Approach:** Implemented Forge Scorecard publishing as a fire-and-forget side-effect after Health Score assessment completion. Created ForgeScorecardAdapter ABC with ForgeScorecardHttpAdapter (httpx + X-Forge-Api-Key header), SyncQueueService with SELECT FOR UPDATE SKIP LOCKED for concurrent-safe job processing, exponential backoff [2,4,8,16,32]s with max 5 retries. Assessment orchestrator calls _publish_scorecard() after each assessment; on retryable failure the job is enqueued; on max-retries-exhausted the record is marked stale. Background asyncio task polls pending_sync_jobs every 30s during application lifespan. API key is injected only via HTTP header, never logged or included in audit records or error responses.
