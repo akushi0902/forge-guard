@@ -63,6 +63,7 @@ class PromptBuilder:
         history: list[dict[str, Any]],
         context: list[dict[str, Any]] | None = None,
         service_context: str | None = None,
+        knowledge_base: dict[str, Any] | None = None,
     ) -> str:
         """Assemble a complete LLM prompt.
 
@@ -70,28 +71,51 @@ class PromptBuilder:
             query:           The user's current query.
             intent:          Classified intent for context injection.
             history:         Previous messages in this conversation.
-            context:         Retrieved domain context (services, findings, etc.).
+            context:         Retrieved domain context references (metadata list).
             service_context: Optional pre-formatted service info string.
+            knowledge_base:  Structured context bundle from ContextAssembler
+                             (WO-067) — enriches the prompt with real service data.
 
         Returns:
             A single string prompt ready to pass to the LLM.
         """
+        import json  # noqa: PLC0415
+
         parts: list[str] = []
 
         # System instructions
         parts.append(f"[SYSTEM]\n{_SYSTEM_PROMPT}")
         parts.append(f"\n[INTENT CONTEXT]\n{_INTENT_CONTEXT.get(intent, '')}")
 
-        # Domain context from retrieval
+        # Structured knowledge base context from WO-067 retrievers
+        if knowledge_base:
+            # Serialize the bundle as JSON for the LLM — include only relevant keys.
+            kb_keys = [
+                "health_context",
+                "findings_context",
+                "policy_context",
+                "release_context",
+                "is_unauthorized",
+                "unauthorized_message",
+                "is_degraded",
+            ]
+            kb_subset = {k: knowledge_base[k] for k in kb_keys if k in knowledge_base}
+            if kb_subset:
+                parts.append(
+                    "\n[KNOWLEDGE BASE DATA]\n"
+                    + json.dumps(kb_subset, indent=2, default=str)
+                )
+
+        # Domain context references (metadata summaries)
         if context:
             context_lines = []
             for item in context[:10]:  # cap at 10 items
                 context_lines.append(
-                    f"- {item.get('type', 'item')}: {item.get('title', '')} "
-                    f"(id={item.get('id', 'unknown')})"
+                    f"- {item.get('type', item.get('source', 'item'))}: "
+                    f"{item.get('title', item.get('summary', ''))}"
                 )
             if context_lines:
-                parts.append("\n[RETRIEVED CONTEXT]\n" + "\n".join(context_lines))
+                parts.append("\n[RETRIEVED CONTEXT REFERENCES]\n" + "\n".join(context_lines))
 
         if service_context:
             parts.append(f"\n[SERVICE DATA]\n{service_context}")
