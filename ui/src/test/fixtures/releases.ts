@@ -1,11 +1,14 @@
 /**
- * Release assessment test fixtures for component and integration tests (WO-075).
+ * Release assessment test fixtures for component and integration tests (WO-075, WO-076).
  *
  * Provides:
  *   - Pending assessment (completed, awaiting decision)
- *   - Completed assessment with APPROVE decision
- *   - Completed assessment with BLOCK decision
+ *   - Completed assessment with APPROVE decision  (health 85, risk 20)
+ *   - Completed assessment with CONDITIONAL_APPROVE decision (health 60, risk 45)
+ *   - Completed assessment with BLOCK decision (health 40, risk 75)
  *   - Escalated assessment (requires Security Reviewer)
+ *   - Assessment with null change_analysis
+ *   - Assessment with missing dimensions in change_analysis
  */
 
 import { type CombinedDecisionView, type ReleaseAssessmentFinding } from '@/types/api';
@@ -70,10 +73,38 @@ export const LOW_RELEASE_FINDING: ReleaseAssessmentFinding = {
 };
 
 // ---------------------------------------------------------------------------
+// Shared change_analysis fixtures
+// ---------------------------------------------------------------------------
+
+/** Healthy change analysis: low complexity, good coverage, few deps, no security issues. */
+const APPROVE_CHANGE_ANALYSIS = {
+  code_complexity: { score: 12, delta: -2, severity: 'low' },
+  test_coverage_delta: { current: 88, previous: 85, delta: 3, severity: 'low' },
+  dependency_changes: { added: 0, removed: 1, updated: 2, severity: 'low' },
+  security_implications: { count: 0, max_severity: null, severity: 'low' },
+};
+
+/** Moderate change analysis: medium complexity, coverage drop, several dep changes. */
+const CONDITIONAL_CHANGE_ANALYSIS = {
+  code_complexity: { score: 28, delta: +5, severity: 'medium' },
+  test_coverage_delta: { current: 71, previous: 80, delta: -9, severity: 'high' },
+  dependency_changes: { added: 3, removed: 0, updated: 5, severity: 'medium' },
+  security_implications: { count: 1, max_severity: 'medium', severity: 'medium' },
+};
+
+/** High-risk change analysis: high complexity, low coverage, critical security finding. */
+const BLOCK_CHANGE_ANALYSIS = {
+  code_complexity: { score: 65, delta: +20, severity: 'high' },
+  test_coverage_delta: { current: 45, previous: 60, delta: -15, severity: 'critical' },
+  dependency_changes: { added: 8, removed: 0, updated: 3, severity: 'high' },
+  security_implications: { count: 3, max_severity: 'critical', severity: 'critical' },
+};
+
+// ---------------------------------------------------------------------------
 // Combined decision view fixtures
 // ---------------------------------------------------------------------------
 
-/** Assessment completed, no decision submitted yet. */
+/** Assessment completed, no decision submitted yet (pending decision). */
 export const PENDING_DECISION_VIEW: CombinedDecisionView = {
   assessment: {
     id: 'rel-001',
@@ -83,6 +114,7 @@ export const PENDING_DECISION_VIEW: CombinedDecisionView = {
     status: 'completed',
     created_at: '2026-08-11T10:00:00Z',
     completed_at: '2026-08-11T10:05:00Z',
+    change_analysis: CONDITIONAL_CHANGE_ANALYSIS,
   },
   system_recommendation: { decision: 'CONDITIONAL_APPROVE' },
   health_score: { overall: 78, dimensions: [] },
@@ -101,9 +133,28 @@ export const PENDING_DECISION_VIEW: CombinedDecisionView = {
   scoring_incomplete_reason: null,
 };
 
-/** Assessment completed with an APPROVE decision. */
+/** Assessment completed with an APPROVE decision (health 85, risk 20). */
 export const APPROVED_DECISION_VIEW: CombinedDecisionView = {
-  ...PENDING_DECISION_VIEW,
+  assessment: {
+    id: 'rel-002',
+    service_id: 'svc-001',
+    commit_sha: 'abc123def456abc123def456abc123def456abc2',
+    pr_reference: 'https://github.com/acme/payment-api/pull/43',
+    status: 'completed',
+    created_at: '2026-08-11T10:00:00Z',
+    completed_at: '2026-08-11T10:05:00Z',
+    change_analysis: APPROVE_CHANGE_ANALYSIS,
+  },
+  system_recommendation: { decision: 'APPROVE' },
+  health_score: { overall: 85, dimensions: [] },
+  risk_score: { overall: 20, contributing_factors: [] },
+  findings_summary: {
+    total: 1,
+    by_severity: {
+      low: { count: 1, items: [LOW_RELEASE_FINDING] },
+    },
+  },
+  escalation: { is_escalated: false, reasons: null },
   decision_record: {
     id: 'dec-001',
     decided_by: 'usr-tech-lead-001',
@@ -113,22 +164,144 @@ export const APPROVED_DECISION_VIEW: CombinedDecisionView = {
     comment: 'Monitoring for the next 24 hours.',
     was_escalated: false,
     created_at: '2026-08-11T11:00:00Z',
+    health_score_at_decision: 85,
+    risk_score_at_decision: 20,
+    conditions: null,
   },
+  scoring_incomplete: false,
+  scoring_incomplete_reason: null,
 };
 
-/** Assessment completed with a BLOCK decision. */
+/** Assessment completed with a CONDITIONAL_APPROVE decision (health 60, risk 45). */
+export const CONDITIONAL_APPROVE_DECISION_VIEW: CombinedDecisionView = {
+  assessment: {
+    id: 'rel-003',
+    service_id: 'svc-001',
+    commit_sha: 'abc123def456abc123def456abc123def456abc3',
+    pr_reference: 'https://github.com/acme/payment-api/pull/44',
+    status: 'completed',
+    created_at: '2026-08-12T10:00:00Z',
+    completed_at: '2026-08-12T10:08:00Z',
+    change_analysis: CONDITIONAL_CHANGE_ANALYSIS,
+  },
+  system_recommendation: { decision: 'CONDITIONAL_APPROVE' },
+  health_score: { overall: 60, dimensions: [] },
+  risk_score: { overall: 45, contributing_factors: [] },
+  findings_summary: {
+    total: 2,
+    by_severity: {
+      high:   { count: 1, items: [HIGH_RELEASE_FINDING] },
+      medium: { count: 1, items: [MEDIUM_RELEASE_FINDING] },
+    },
+  },
+  escalation: { is_escalated: false, reasons: null },
+  decision_record: {
+    id: 'dec-003',
+    decided_by: 'usr-tech-lead-001',
+    decided_by_role: 'tech_lead',
+    decision: 'CONDITIONAL_APPROVE',
+    rationale: 'Test coverage drop is acceptable for hotfix. Conditions apply.',
+    comment: null,
+    was_escalated: false,
+    created_at: '2026-08-12T11:00:00Z',
+    health_score_at_decision: 60,
+    risk_score_at_decision: 45,
+    conditions: [
+      'Increase test coverage to >= 80% within 5 business days.',
+      'Resolve high-severity dependency vulnerability CVE-2021-23337.',
+    ],
+  },
+  scoring_incomplete: false,
+  scoring_incomplete_reason: null,
+};
+
+/** Assessment completed with a BLOCK decision (health 40, risk 75). */
 export const BLOCKED_DECISION_VIEW: CombinedDecisionView = {
-  ...PENDING_DECISION_VIEW,
+  assessment: {
+    id: 'rel-004',
+    service_id: 'svc-001',
+    commit_sha: 'abc123def456abc123def456abc123def456abc4',
+    pr_reference: null,
+    status: 'completed',
+    created_at: '2026-08-12T12:00:00Z',
+    completed_at: '2026-08-12T12:06:00Z',
+    change_analysis: BLOCK_CHANGE_ANALYSIS,
+  },
+  system_recommendation: { decision: 'BLOCK' },
+  health_score: { overall: 40, dimensions: [] },
+  risk_score: { overall: 75, contributing_factors: [] },
+  findings_summary: {
+    total: 1,
+    by_severity: {
+      high: { count: 1, items: [HIGH_RELEASE_FINDING] },
+    },
+  },
+  escalation: { is_escalated: false, reasons: null },
   decision_record: {
     id: 'dec-002',
     decided_by: 'usr-tech-lead-001',
     decided_by_role: 'tech_lead',
     decision: 'BLOCK',
-    rationale: 'High test coverage gap poses unacceptable risk. Must resolve before releasing.',
+    rationale: 'High test coverage gap and critical complexity increase. Must resolve before releasing.',
     comment: null,
     was_escalated: false,
-    created_at: '2026-08-11T11:00:00Z',
+    created_at: '2026-08-12T13:00:00Z',
+    health_score_at_decision: 40,
+    risk_score_at_decision: 75,
+    conditions: null,
   },
+  scoring_incomplete: false,
+  scoring_incomplete_reason: null,
+};
+
+/** Assessment with null change_analysis (no analysis data available). */
+export const NULL_CHANGE_ANALYSIS_VIEW: CombinedDecisionView = {
+  assessment: {
+    id: 'rel-005',
+    service_id: 'svc-001',
+    commit_sha: 'abc123def456abc123def456abc123def456abc5',
+    pr_reference: null,
+    status: 'completed',
+    created_at: '2026-08-13T08:00:00Z',
+    completed_at: '2026-08-13T08:05:00Z',
+    change_analysis: null,
+  },
+  system_recommendation: { decision: 'CONDITIONAL_APPROVE' },
+  health_score: { overall: 65, dimensions: [] },
+  risk_score: { overall: 50, contributing_factors: [] },
+  findings_summary: { total: 0, by_severity: {} },
+  escalation: { is_escalated: false, reasons: null },
+  decision_record: null,
+  scoring_incomplete: false,
+  scoring_incomplete_reason: null,
+};
+
+/** Assessment with partially missing dimensions in change_analysis. */
+export const PARTIAL_CHANGE_ANALYSIS_VIEW: CombinedDecisionView = {
+  assessment: {
+    id: 'rel-006',
+    service_id: 'svc-001',
+    commit_sha: 'abc123def456abc123def456abc123def456abc6',
+    pr_reference: null,
+    status: 'completed',
+    created_at: '2026-08-13T09:00:00Z',
+    completed_at: '2026-08-13T09:05:00Z',
+    // Only code_complexity is present; other dimensions are missing
+    change_analysis: {
+      code_complexity: { score: 20, delta: 0, severity: 'low' },
+      // test_coverage_delta: missing
+      // dependency_changes: missing
+      // security_implications: missing
+    },
+  },
+  system_recommendation: { decision: 'APPROVE' },
+  health_score: { overall: 72, dimensions: [] },
+  risk_score: { overall: 28, contributing_factors: [] },
+  findings_summary: { total: 0, by_severity: {} },
+  escalation: { is_escalated: false, reasons: null },
+  decision_record: null,
+  scoring_incomplete: false,
+  scoring_incomplete_reason: null,
 };
 
 /** Escalated assessment (critical security finding, requires Security Reviewer). */
@@ -141,6 +314,7 @@ export const ESCALATED_DECISION_VIEW: CombinedDecisionView = {
     status: 'completed',
     created_at: '2026-08-12T09:00:00Z',
     completed_at: '2026-08-12T09:08:00Z',
+    change_analysis: BLOCK_CHANGE_ANALYSIS,
   },
   system_recommendation: { decision: 'BLOCK' },
   health_score: { overall: 55, dimensions: [] },
@@ -170,6 +344,7 @@ export const PROCESSING_DECISION_VIEW: CombinedDecisionView = {
     status: 'pending',
     created_at: '2026-08-12T08:00:00Z',
     completed_at: null,
+    change_analysis: null,
   },
   system_recommendation: { decision: 'PENDING' },
   health_score: null,
