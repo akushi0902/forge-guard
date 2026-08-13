@@ -433,3 +433,51 @@ export interface AssessmentTrendsResponse {
   trends: AssessmentTrendPoint[];
   resolution_rates: ResolutionRatePoint[];
 }
+
+// --------------------------------------------------------------------------
+// AI Agent Chat (WO-084)
+// --------------------------------------------------------------------------
+
+/** Domain entity referenced in an agent response (service, finding, policy). */
+export interface ContextReference {
+  type: 'service' | 'finding' | 'policy' | string;
+  id: string;
+  title: string;
+  /** Extra metadata depending on type (health_score, severity, etc.). */
+  metadata?: Record<string, unknown>;
+}
+
+/** Response from POST /api/v1/agent/query. */
+export interface AgentQueryResponse {
+  answer: string;
+  confidence: number;
+  context_refs: ContextReference[];
+  conversation_id: string;
+  is_template_fallback: boolean;
+  created_at: string;
+}
+
+/** A single message in the chat UI (local model). */
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'agent';
+  text: string;
+  context_refs?: ContextReference[];
+  is_template_fallback?: boolean;
+  timestamp: string;
+}
+
+/** Summary of a past conversation for the sidebar list. */
+export interface ConversationSummary {
+  id: string;
+  preview: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Response from GET /api/v1/agent/conversations. */
+export interface ConversationListResponse {
+  items: ConversationSummary[];
+  next_cursor: string | null;
+}

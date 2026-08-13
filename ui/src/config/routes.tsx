@@ -45,6 +45,7 @@ import {
   useRouteError,
 } from 'react-router-dom';
 
+import { AIChatFAB } from '@/components/AIChatFAB/AIChatFAB';
 import { Sidebar, type NavItem } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { MainContent } from '@/components/layout/MainContent';
@@ -140,6 +141,7 @@ function AppLayout(): JSX.Element {
           <Outlet />
         </MainContent>
       </Box>
+      <AIChatFAB />
     </Box>
   );
 }
@@ -185,6 +187,7 @@ const ReleaseAssessmentRequestPage = lazy(() => import('@/pages/ReleaseAssessmen
 const ReleaseDecisionReviewPage = lazy(() => import('@/pages/ReleaseDecisionReviewPage').then((m) => ({ default: m.ReleaseDecisionReviewPage })));
 const SecurityReviewPage = lazy(() => import('@/pages/SecurityReview').then((m) => ({ default: m.SecurityReview })));
 const RemediationDetailPage = lazy(() => import('@/pages/RemediationDetail').then((m) => ({ default: m.RemediationDetail })));
+const AIChatInterfacePage = lazy(() => import('@/pages/AIChat').then((m) => ({ default: m.AIChatInterface })));
 
 // ---------------------------------------------------------------------------
 // Guarded route helper
@@ -282,6 +285,10 @@ export const router = createBrowserRouter([
           {
             path: 'ai-agent',
             element: guarded('service:read', <AiAgentPage />),
+          },
+          {
+            path: 'agent/chat',
+            element: guarded('service:read', <AIChatInterfacePage />),
           },
           {
             path: 'audit',

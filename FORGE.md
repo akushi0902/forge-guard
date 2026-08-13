@@ -637,3 +637,10 @@
 - **Files:** 1 (+31/-6)
 - **Duration:** 648ss
 - **Approach:** All WO-082 implementation files were already present in the repository (created by prior WOs). The test file had a critical gap: it used MemoryRouter with initialEntries but never set up a <Route> with the /findings/:findingId path pattern, so useParams() always returned {} — causing disabled queries and no data load. Fixed by adding vi.mock('react-router-dom') to mock useParams with a mutable routeParams object, allowing per-test findingId override. Also updated afterEach to reset routeParams to the default ID between tests, preventing leakage.
+
+## WO-084: User Story: WO-084 - AI Agent Natural Language Chat Interface
+- **Status:** completed
+- **Commit:** `10a1fbf`
+- **Files:** 19 (+1524/-0)
+- **Duration:** 791ss
+- **Approach:** Built a full-page AI Agent chat interface at /agent/chat using Zustand for optimistic message state, TanStack Query mutations for the POST /api/v1/agent/query endpoint, and a component tree that separates ConversationSidebar from ChatArea (ChatHeader + ChatBody + ChatInputRow + MessageBubble + ContextualCard). A floating AIChatFAB (fixed, z-index 1000) uses a Mantine Drawer (AIChatPanel) to expose the same chat on any page. Credential sanitization via regex is applied to every agent response before rendering. LLM unavailability (503) is caught in the mutation onError handler and converted to a template fallback message with is_template_fallback=true, surfaced as a 'Limited mode' badge on the agent bubble.
