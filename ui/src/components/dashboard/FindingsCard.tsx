@@ -1,9 +1,11 @@
 import { type JSX, useState } from 'react';
-import { Card, Stack, Text } from '@mantine/core';
+import { Card, Group, Stack, Text } from '@mantine/core';
 import { type ColumnDef, DataTable, SeverityBadge, TabBar } from '@/components/shared';
 import { useServiceFindings } from '@/hooks/api/useFindings';
 import { type Finding } from '@/types/api';
 import { type FindingSeverity } from '@/types';
+import { useDemoContext } from '@/hooks/useDemoContext';
+import { MockDataBadge } from '@/components/common/MockDataBadge';
 
 const SEVERITY_TABS = [
   { value: 'all',      label: 'All' },
@@ -40,6 +42,7 @@ export interface FindingsCardProps {
  */
 export function FindingsCard({ serviceId }: FindingsCardProps): JSX.Element {
   const [selectedSeverity, setSelectedSeverity] = useState<string>('all');
+  const { isDemo } = useDemoContext();
 
   const filters =
     selectedSeverity !== 'all' ? { severity: selectedSeverity } : undefined;
@@ -94,9 +97,12 @@ export function FindingsCard({ serviceId }: FindingsCardProps): JSX.Element {
   return (
     <Card withBorder>
       <Stack gap="md">
-        <Text fw={600} size="lg">
-          Findings
-        </Text>
+        <Group justify="space-between" align="center">
+          <Text fw={600} size="lg">
+            Findings
+          </Text>
+          {isDemo && <MockDataBadge />}
+        </Group>
         <TabBar
           tabs={SEVERITY_TABS}
           value={selectedSeverity}

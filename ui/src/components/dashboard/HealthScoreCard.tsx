@@ -1,6 +1,8 @@
 import { Card, Group, Stack, Text } from '@mantine/core';
 import { type ServiceScore } from '@/types/api';
 import { ScoreRing } from '@/components/shared';
+import { useDemoContext } from '@/hooks/useDemoContext';
+import { MockDataBadge } from '@/components/common/MockDataBadge';
 import { DimensionBar } from './DimensionBar';
 
 export interface HealthScoreCardProps {
@@ -28,11 +30,15 @@ export function healthScoreColor(overallScore: number): string {
  * <HealthScoreCard score={scoreData} />
  */
 export function HealthScoreCard({ score }: HealthScoreCardProps) {
+  const { isDemo } = useDemoContext();
   return (
     <Card withBorder>
-      <Text fw={600} size="lg" mb="md">
-        Engineering Health Score
-      </Text>
+      <Group justify="space-between" align="center" mb="md">
+        <Text fw={600} size="lg">
+          Engineering Health Score
+        </Text>
+        {isDemo && <MockDataBadge />}
+      </Group>
       <Group align="flex-start" gap="xl" wrap="nowrap">
         <Stack align="center" gap={4} style={{ flexShrink: 0 }}>
           <ScoreRing

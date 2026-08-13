@@ -1,0 +1,9 @@
+{
+  "id": "svc-real-001",
+  "name": "Checkout Service",
+  "description": "Production checkout microservice.",
+  "repository_url": "https://github.com/example/checkout-service",
+  "health_score": 88,
+  "last_evaluated_at": "2026-08-13T09:00:00Z",
+  "is_demo": false
+}

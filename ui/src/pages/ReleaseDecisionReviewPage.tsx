@@ -35,6 +35,8 @@ import { notifications } from '@mantine/notifications';
 import { type JSX, useCallback, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { DemoIndicatorProvider } from '@/contexts/DemoIndicatorContext';
+import { MockDataBanner } from '@/components/common/MockDataBanner';
 import { AssessmentMetadata } from '@/components/releases/AssessmentMetadata';
 import { ApproveModal } from '@/components/releases/ApproveModal';
 import { BlockModal } from '@/components/releases/BlockModal';
@@ -413,8 +415,14 @@ export function ReleaseDecisionReviewPage(): JSX.Element {
   // Pending-decision state (actionable)
   // ---------------------------------------------------------------------------
 
+  const isDemo = assessment.is_demo ?? false;
+
   return (
+    <DemoIndicatorProvider isDemo={isDemo}>
     <Container size="lg" py="xl" data-testid="page-pending-decision">
+      {/* Demo data banner */}
+      {isDemo && <MockDataBanner />}
+
       {/* Escalation banner */}
       {escalation.is_escalated && (
         <Alert
@@ -508,5 +516,6 @@ export function ReleaseDecisionReviewPage(): JSX.Element {
         rationale={blockModal.rationale}
       />
     </Container>
+    </DemoIndicatorProvider>
   );
 }

@@ -33,6 +33,8 @@ import { HealthScoreCard } from '@/components/dashboard/HealthScoreCard';
 import { StatsGrid } from '@/components/dashboard/StatsGrid';
 import { FindingsCard } from '@/components/dashboard/FindingsCard';
 import { EmptyStateCard } from '@/components/dashboard/EmptyStateCard';
+import { DemoIndicatorProvider } from '@/contexts/DemoIndicatorContext';
+import { MockDataBanner } from '@/components/common/MockDataBanner';
 
 /**
  * Loading skeleton that matches the dashboard layout dimensions.
@@ -102,6 +104,8 @@ export function DeveloperDashboard(): JSX.Element {
     (highFindings.data?.total_count ?? 0);
   const lastEvaluatedAt    = serviceQuery.data?.last_evaluated_at;
   const overallScore       = scoreQuery.data?.overall_score ?? 0;
+  const isDemo             = serviceQuery.data?.is_demo ?? false;
+  const serviceName        = serviceQuery.data?.name ?? null;
 
   const serviceSelectData = services.map((s) => ({
     value: s.id,
@@ -109,6 +113,7 @@ export function DeveloperDashboard(): JSX.Element {
   }));
 
   return (
+    <DemoIndicatorProvider isDemo={isDemo} serviceName={serviceName}>
     <Stack gap="lg">
       {/* Header row */}
       <Group justify="space-between" align="flex-end" wrap="wrap">
@@ -126,6 +131,9 @@ export function DeveloperDashboard(): JSX.Element {
           data-testid="service-selector"
         />
       </Group>
+
+      {/* Demo data banner — shown below header when service is a demo service */}
+      {isDemo && <MockDataBanner />}
 
       {/* No service selected */}
       {!serviceId && (
@@ -168,5 +176,6 @@ export function DeveloperDashboard(): JSX.Element {
         </Stack>
       )}
     </Stack>
+    </DemoIndicatorProvider>
   );
 }

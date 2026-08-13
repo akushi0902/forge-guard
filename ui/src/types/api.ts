@@ -105,6 +105,8 @@ export interface Service {
   repository_url: string | null;
   health_score: number | null;
   last_evaluated_at: string | null;
+  /** True when this is a demo/simulated service. Defaults to false when absent. */
+  is_demo?: boolean;
 }
 
 // --------------------------------------------------------------------------
@@ -137,6 +139,8 @@ export interface Finding {
   dimension: string;
   status: FindingStatus;
   created_at: string;
+  /** Inherited from the parent service. True when finding belongs to a demo service. */
+  is_demo?: boolean;
 }
 
 export interface RemediationRecommendation {
@@ -161,6 +165,8 @@ export interface ReleaseAssessment {
   change_analysis: string | null;
   created_at: string;
   completed_at: string | null;
+  /** Inherited from the parent service. True when assessment belongs to a demo service. */
+  is_demo?: boolean;
 }
 
 export interface ReleaseDecision {
@@ -298,6 +304,8 @@ export interface CombinedDecisionView {
     status: string;
     created_at: string;
     completed_at: string | null;
+    /** True when the parent service is a demo/simulated service. */
+    is_demo?: boolean;
   };
   system_recommendation: {
     decision: string;
