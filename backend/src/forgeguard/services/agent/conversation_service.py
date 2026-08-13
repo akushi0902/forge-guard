@@ -1,9 +1,9 @@
-"""ConversationService: AI agent conversation orchestration (WO-065).
+"""ConversationService: AI agent conversation orchestration (WO-065, WO-067).
 
 Pipeline for POST /api/v1/agent/query:
     1. Classify query intent
     2. Load or create conversation
-    3. Retrieve context (placeholder for WOREF-067)
+    3. Retrieve context via ContextAssembler (WO-067)
     4. Build LLM prompt with history + context
     5. Call AI engine (with circuit-breaker fallback to template)
     6. Persist new messages atomically
@@ -28,6 +28,7 @@ from forgeguard.api.schemas.agent import (
 )
 from forgeguard.core.exceptions import ForbiddenError, NotFoundError
 from forgeguard.services.agent.intent_classifier import IntentCategory, IntentClassifier
+from forgeguard.services.agent.knowledge_base.context_assembler import ContextAssembler
 from forgeguard.services.agent.prompt_builder import PromptBuilder
 from forgeguard.services.ai_engine.errors import CircuitOpenError
 
@@ -59,12 +60,14 @@ class ConversationService:
         agent_repo: Any,
         ai_engine: Any,
         audit_svc: Any,
+        context_assembler: ContextAssembler | None = None,
     ) -> None:
         self._repo = agent_repo
         self._ai = ai_engine
         self._audit = audit_svc
         self._classifier = IntentClassifier()
         self._prompt_builder = PromptBuilder()
+        self._context_assembler: ContextAssembler | None = context_assembler
 
     # ------------------------------------------------------------------
     # Query
@@ -78,6 +81,7 @@ class ConversationService:
         actor_role: str,
         conversation_id: uuid.UUID | None = None,
         service_id: uuid.UUID | None = None,
+        query_params: dict[str, Any] | None = None,
     ) -> AgentQueryResponse:
         """Process a user query and return a structured response."""
         now = datetime.now(tz=timezone.utc)
@@ -106,8 +110,37 @@ class ConversationService:
             conv = await self._repo.create_conversation(user_id)
             conversation_id = conv["id"]
 
-        # ── 3. Context retrieval (placeholder for WOREF-067) ───────────
+        # ── 3. Context retrieval via ContextAssembler (WO-067) ────────────
         context_refs: list[ContextReference] = []
+        context_bundle_dict: dict[str, Any] = {}
+
+        if self._context_assembler is not None:
+            try:
+                bundle = await self._context_assembler.assemble(
+                    user_id=user_id,
+                    actor_role=actor_role,
+                    intent=intent,
+                    service_id=service_id,
+                    query_params=query_params,
+                )
+                context_bundle_dict = bundle.to_prompt_dict()
+                # Build ContextReference entries from domains that returned data.
+                for domain in ("health", "findings", "policy", "release"):
+                    ctx = getattr(bundle, domain, None)
+                    if ctx is not None and not ctx.is_empty and not ctx.is_degraded:
+                        context_refs.append(
+                            ContextReference(
+                                type=f"{domain}_retriever",
+                                id=str(service_id) if service_id else "global",
+                                title=f"{domain.capitalize()} data for service",
+                            )
+                        )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "agent.query.context_assembly_failed",
+                    conversation_id=str(conversation_id),
+                    error=str(exc),
+                )
 
         # ── 4. Build prompt ────────────────────────────────────────────
         prompt = self._prompt_builder.build(
@@ -115,6 +148,7 @@ class ConversationService:
             intent=intent,
             history=history,
             context=[c.model_dump() for c in context_refs],
+            knowledge_base=context_bundle_dict,
         )
 
         # ── 5. Call AI engine with circuit-breaker fallback ───────────

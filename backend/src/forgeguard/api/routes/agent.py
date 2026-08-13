@@ -129,11 +129,13 @@ async def agent_query(
     from forgeguard.core.dependencies import get_ai_engine  # noqa: PLC0415
     from forgeguard.data.repositories.agent_repository import AgentRepository  # noqa: PLC0415
     from forgeguard.services.agent.conversation_service import ConversationService  # noqa: PLC0415
+    from forgeguard.services.agent.knowledge_base.context_assembler import ContextAssembler  # noqa: PLC0415
 
     svc = ConversationService(
         agent_repo=AgentRepository(pool),
         ai_engine=get_ai_engine(),
         audit_svc=audit_svc,
+        context_assembler=ContextAssembler(pool),
     )
 
     try:
