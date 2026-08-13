@@ -8,6 +8,20 @@ export interface HealthScoreCardProps {
 }
 
 /**
+ * Map an overall health score to a semantic colour per AC-2:
+ *   green  ≥ 70
+ *   amber  50–69
+ *   red    < 50
+ *
+ * Exported for unit-testing purposes.
+ */
+export function healthScoreColor(overallScore: number): string {
+  if (overallScore >= 70) return 'var(--mantine-color-success-6, #16a34a)';
+  if (overallScore >= 50) return 'var(--mantine-color-warning-6, #d97706)';
+  return 'var(--mantine-color-danger-6, #dc2626)';
+}
+
+/**
  * Card displaying the overall ScoreRing and one DimensionBar per dimension.
  *
  * @example
@@ -26,6 +40,7 @@ export function HealthScoreCard({ score }: HealthScoreCardProps) {
             size={120}
             strokeWidth={10}
             label="Overall health score"
+            color={healthScoreColor(score.overall_score)}
           />
           <Text size="xs" c="dimmed">
             Overall
