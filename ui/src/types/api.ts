@@ -286,6 +286,12 @@ export interface ReleaseDecisionRecord {
   comment: string | null;
   was_escalated: boolean;
   created_at: string;
+  /** Health Score recorded at the moment the decision was made. */
+  health_score_at_decision?: number | null;
+  /** Risk Score recorded at the moment the decision was made. */
+  risk_score_at_decision?: number | null;
+  /** Conditions that must be met before deployment (for CONDITIONAL_APPROVE). */
+  conditions?: string[] | null;
 }
 
 /** Full combined decision view from GET /api/v1/releases/{id}/decision. */
@@ -298,6 +304,8 @@ export interface CombinedDecisionView {
     status: string;
     created_at: string;
     completed_at: string | null;
+    /** Change analysis JSONB from the assessment pipeline. */
+    change_analysis?: Record<string, unknown> | null;
   };
   system_recommendation: {
     decision: string;

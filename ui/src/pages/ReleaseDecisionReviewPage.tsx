@@ -1,5 +1,5 @@
 /**
- * ReleaseDecisionReviewPage — Release Decision Review interface (WO-075).
+ * ReleaseDecisionReviewPage — Combined Release Decision Review interface (WO-075 + WO-076).
  *
  * Route: /releases/:id
  *
@@ -24,7 +24,7 @@ import {
   Card,
   Center,
   Container,
-  Divider,
+  Grid,
   Group,
   Loader,
   Stack,
@@ -38,8 +38,12 @@ import { useParams } from 'react-router-dom';
 import { AssessmentMetadata } from '@/components/releases/AssessmentMetadata';
 import { ApproveModal } from '@/components/releases/ApproveModal';
 import { BlockModal } from '@/components/releases/BlockModal';
+import { ConditionsCard } from '@/components/releases/ConditionsCard';
 import { FindingsTable } from '@/components/releases/FindingsTable';
 import { ReleaseDecisionCard } from '@/components/releases/ReleaseDecisionCard';
+import { RiskFactorsCard } from '@/components/releases/RiskFactorsCard';
+import { ScoresRow } from '@/components/releases/ScoresRow';
+import { ThresholdInfoSection } from '@/components/releases/ThresholdInfoSection';
 import { DecisionBanner } from '@/components/shared/DecisionBanner';
 import { ScoreRing } from '@/components/shared/ScoreRing';
 import { useReleaseDecisionView, useSubmitDecision } from '@/hooks/api/useReleases';
@@ -276,7 +280,7 @@ export function ReleaseDecisionReviewPage(): JSX.Element {
   // Processing state (pending or in_progress)
   // ---------------------------------------------------------------------------
 
-  const { assessment, risk_score, findings_summary, escalation, decision_record } = data;
+  const { assessment, risk_score, health_score, findings_summary, escalation, decision_record } = data;
 
   if (assessment.status === 'pending' || assessment.status === 'in_progress') {
     return (
@@ -304,6 +308,8 @@ export function ReleaseDecisionReviewPage(): JSX.Element {
   const allFindings = flattenFindings(findings_summary.by_severity);
   const findingCounts = countBySeverity(findings_summary.by_severity);
   const riskScoreValue = risk_score?.overall ?? null;
+  const healthScoreValue = health_score?.overall ?? null;
+  const changeAnalysis = (assessment.change_analysis as Record<string, unknown> | null | undefined) ?? null;
 
   // ---------------------------------------------------------------------------
   // Decided state (read-only)
@@ -311,6 +317,13 @@ export function ReleaseDecisionReviewPage(): JSX.Element {
 
   if (decision_record !== null) {
     const outcome = toDecisionOutcome(decision_record.decision);
+    const isConditional = decision_record.decision.toUpperCase() === 'CONDITIONAL_APPROVE';
+    const conditions = decision_record.conditions ?? [];
+
+    // Use scores from the decision record when available, fall back to assessment scores
+    const displayHealthScore = decision_record.health_score_at_decision ?? healthScoreValue;
+    const displayRiskScore = decision_record.risk_score_at_decision ?? riskScoreValue;
+
     return (
       <Container size="lg" py="xl" data-testid="page-decided">
         {/* Escalation banner */}
@@ -334,6 +347,13 @@ export function ReleaseDecisionReviewPage(): JSX.Element {
           data-testid="decision-banner"
         />
 
+        {/* Conditions (CONDITIONAL_APPROVE only) */}
+        {isConditional && (
+          <Box mb="md">
+            <ConditionsCard conditions={conditions} />
+          </Box>
+        )}
+
         {/* Assessment metadata */}
         <AssessmentMetadata
           id={assessment.id}
@@ -344,6 +364,20 @@ export function ReleaseDecisionReviewPage(): JSX.Element {
           createdAt={assessment.created_at}
           completedAt={assessment.completed_at}
         />
+
+        {/* Scores row (health + risk + decision) */}
+        <Box mt="md" mb="md">
+          <ScoresRow
+            healthScore={displayHealthScore}
+            riskScore={displayRiskScore}
+            decision={decision_record.decision}
+          />
+        </Box>
+
+        {/* Threshold info */}
+        <Box mb="md">
+          <ThresholdInfoSection />
+        </Box>
 
         {/* Decision details (read-only) */}
         <Card withBorder radius="md" p="md" mt="md" data-testid="decision-details-card">
@@ -379,9 +413,24 @@ export function ReleaseDecisionReviewPage(): JSX.Element {
           </Stack>
         </Card>
 
-        {/* Risk Score */}
+        {/* Two-column layout: Risk Factors + Findings */}
+        <Grid mt="md" gutter="md">
+          <Grid.Col span={{ base: 12, md: 5 }}>
+            <RiskFactorsCard changeAnalysis={changeAnalysis} />
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, md: 7 }}>
+            {allFindings.length > 0 && (
+              <Box>
+                <Title order={4} mb="sm">Findings</Title>
+                <FindingsTable findings={allFindings} />
+              </Box>
+            )}
+          </Grid.Col>
+        </Grid>
+
+        {/* Risk Score (legacy ring, kept for backward compat) */}
         {riskScoreValue !== null && (
-          <Box mt="md">
+          <Box mt="md" style={{ display: 'none' }}>
             <Group gap="sm" align="center">
               <Text fw={500}>Release Risk Score</Text>
               <ScoreRing
@@ -397,14 +446,6 @@ export function ReleaseDecisionReviewPage(): JSX.Element {
             </Group>
           </Box>
         )}
-
-        {/* Findings */}
-        {allFindings.length > 0 && (
-          <Box mt="md">
-            <Title order={4} mb="sm">Findings</Title>
-            <FindingsTable findings={allFindings} />
-          </Box>
-        )}
       </Container>
     );
   }
@@ -412,6 +453,9 @@ export function ReleaseDecisionReviewPage(): JSX.Element {
   // ---------------------------------------------------------------------------
   // Pending-decision state (actionable)
   // ---------------------------------------------------------------------------
+
+  // For pending-decision, use top-level assessment scores and system recommendation
+  const systemDecision = data.system_recommendation?.decision ?? null;
 
   return (
     <Container size="lg" py="xl" data-testid="page-pending-decision">
@@ -441,6 +485,20 @@ export function ReleaseDecisionReviewPage(): JSX.Element {
           completedAt={assessment.completed_at}
         />
 
+        {/* Scores row — show 'Pending Review' for combined decision */}
+        <ScoresRow
+          healthScore={healthScoreValue}
+          riskScore={riskScoreValue}
+          decision={
+            systemDecision && systemDecision.toUpperCase() !== 'PENDING'
+              ? systemDecision
+              : null
+          }
+        />
+
+        {/* Threshold info */}
+        <ThresholdInfoSection />
+
         {/* Risk Score */}
         <Card withBorder radius="md" p="md" data-testid="risk-score-card">
           <Group gap="md" align="center">
@@ -467,15 +525,23 @@ export function ReleaseDecisionReviewPage(): JSX.Element {
           </Group>
         </Card>
 
-        {/* Findings section */}
-        <Card withBorder radius="md" p="md" data-testid="findings-section">
-          <Stack gap="sm">
-            <Group justify="space-between" align="center">
-              <Title order={4}>Findings ({findings_summary.total})</Title>
-            </Group>
-            <FindingsTable findings={allFindings} />
-          </Stack>
-        </Card>
+        {/* Two-column layout: Risk Factors + Findings */}
+        <Grid gutter="md">
+          <Grid.Col span={{ base: 12, md: 5 }}>
+            <RiskFactorsCard changeAnalysis={changeAnalysis} />
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, md: 7 }}>
+            {/* Findings section */}
+            <Card withBorder radius="md" p="md" data-testid="findings-section">
+              <Stack gap="sm">
+                <Group justify="space-between" align="center">
+                  <Title order={4}>Findings ({findings_summary.total})</Title>
+                </Group>
+                <FindingsTable findings={allFindings} />
+              </Stack>
+            </Card>
+          </Grid.Col>
+        </Grid>
 
         {/* Decision form */}
         <ReleaseDecisionCard
