@@ -182,6 +182,7 @@ const RbacPage        = lazy(() => import('@/pages/RbacPage').then((m) => ({ def
 const UsersPage       = lazy(() => import('@/pages/UsersPage').then((m) => ({ default: m.UsersPage })));
 const IntegrationsPage = lazy(() => import('@/pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })));
 const ReleaseAssessmentRequestPage = lazy(() => import('@/pages/ReleaseAssessmentRequestPage').then((m) => ({ default: m.ReleaseAssessmentRequestPage })));
+const ReleaseDecisionReviewPage = lazy(() => import('@/pages/ReleaseDecisionReviewPage').then((m) => ({ default: m.ReleaseDecisionReviewPage })));
 
 // ---------------------------------------------------------------------------
 // Guarded route helper
@@ -243,6 +244,10 @@ export const router = createBrowserRouter([
           {
             path: 'releases/new',
             element: guarded('assessment:write', <ReleaseAssessmentRequestPage />),
+          },
+          {
+            path: 'releases/:id',
+            element: guarded('service.view', <ReleaseDecisionReviewPage />),
           },
           {
             path: 'findings',
