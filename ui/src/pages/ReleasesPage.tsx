@@ -1,14 +1,18 @@
 /**
- * Release Assessments placeholder page — to be implemented in later WOs.
+ * Release Assessments page — placeholder; shows empty state until release listing is implemented.
  */
 import { type JSX } from 'react';
-import { Stack, Text, Title } from '@mantine/core';
+import { Stack, Title } from '@mantine/core';
+import { useNavigate } from 'react-router-dom';
+import { ReleasesEmptyState } from '@/components/empty-states/ReleasesEmptyState';
 
 export function ReleasesPage(): JSX.Element {
+  const navigate = useNavigate();
+
   return (
     <Stack gap="md">
       <Title order={2}>Release Assessments</Title>
-      <Text c="dimmed">Release risk scoring and decisions — coming soon.</Text>
+      <ReleasesEmptyState onRequestAssessment={() => void navigate('/releases/new')} />
     </Stack>
   );
 }

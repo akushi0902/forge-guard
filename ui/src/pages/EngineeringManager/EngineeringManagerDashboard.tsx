@@ -1,5 +1,5 @@
 import { type JSX } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Badge,
@@ -15,6 +15,7 @@ import {
 
 import { useServicesWithScores } from '@/hooks/api/useServicesWithScores';
 import { useAssessmentTrends } from '@/hooks/api/useAssessmentTrends';
+import { ManagerDashboardEmptyState } from '@/components/empty-states/ManagerDashboardEmptyState';
 import { KPIGrid } from './components/KPIGrid';
 import { HealthDistributionCard } from './components/HealthDistributionCard';
 import { TrendChartCard } from './components/TrendChartCard';
@@ -48,6 +49,7 @@ function DashboardSkeleton(): JSX.Element {
 // ---------------------------------------------------------------------------
 
 export function EngineeringManagerDashboard(): JSX.Element {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedTeam = searchParams.get('team') ?? '';
 
@@ -123,8 +125,15 @@ export function EngineeringManagerDashboard(): JSX.Element {
           </Alert>
         )}
 
+        {/* Empty state — no services onboarded yet */}
+        {!isLoading && !hasError && services.length === 0 && (
+          <ManagerDashboardEmptyState
+            onOnboardService={() => void navigate('/services/new')}
+          />
+        )}
+
         {/* Dashboard content */}
-        {!isLoading && !hasError && (
+        {!isLoading && !hasError && services.length > 0 && (
           <>
             {/* KPI summary cards */}
             <KPIGrid services={services} />
