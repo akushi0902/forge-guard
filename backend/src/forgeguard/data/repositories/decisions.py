@@ -79,6 +79,70 @@ class DecisionRepository(BaseRepository):
             rows = await conn.fetch(q, uuid.UUID(str(release_assessment_id)))
         return self._rows(rows)
 
+    async def update_workflow_status(
+        self,
+        id: str | uuid.UUID,
+        *,
+        workflow_id: str | None = None,
+        routing_method: str | None = None,
+        workflow_status: str | None = None,
+        workflow_timeout_at: Any = None,
+    ) -> dict[str, Any] | None:
+        """Update workflow-tracking fields on a release_decisions row.
+
+        Only the fields explicitly passed (non-None) are updated.
+        This is the sole sanctioned mutation path for workflow state — the main
+        ``update()`` method intentionally raises NotImplementedError.
+        """
+        sets: list[str] = []
+        params: list[Any] = [uuid.UUID(str(id))]
+        idx = 2
+
+        if workflow_id is not None:
+            sets.append(f"workflow_id = ${idx}")
+            params.append(uuid.UUID(str(workflow_id)) if workflow_id else None)
+            idx += 1
+        if routing_method is not None:
+            sets.append(f"routing_method = ${idx}")
+            params.append(routing_method)
+            idx += 1
+        if workflow_status is not None:
+            sets.append(f"workflow_status = ${idx}")
+            params.append(workflow_status)
+            idx += 1
+        if workflow_timeout_at is not None:
+            sets.append(f"workflow_timeout_at = ${idx}")
+            params.append(workflow_timeout_at)
+            idx += 1
+
+        if not sets:
+            return await self.get_by_id(id)
+
+        q = (
+            f"UPDATE release_decisions SET {', '.join(sets)} "
+            f"WHERE id = $1 RETURNING *"
+        )
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(q, *params)
+        return self._row(row)
+
+    async def list_active_workflows(self) -> list[dict[str, Any]]:
+        """Return release_decisions rows with non-terminal workflow_status.
+
+        Used by the 60-second polling job to determine which workflows to poll.
+        """
+        q = (
+            "SELECT id, release_assessment_id, workflow_id, "
+            "routing_method, workflow_status, workflow_timeout_at "
+            "FROM release_decisions "
+            "WHERE workflow_status IN ('pending', 'in_review') "
+            "AND workflow_id IS NOT NULL "
+            "ORDER BY created_at ASC"
+        )
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(q)
+        return self._rows(rows)
+
     async def list_by_service(
         self,
         service_id: str | uuid.UUID,

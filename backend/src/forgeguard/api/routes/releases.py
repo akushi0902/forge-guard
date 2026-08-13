@@ -45,6 +45,7 @@ from forgeguard.core.dependencies import (
     get_pool,
     get_release_assessment_repo,
     get_service_repository,
+    get_workflow_adapter,
 )
 from forgeguard.core.permissions import Permissions, UserRole
 from forgeguard.data.repositories.decision_assignment_repository import (
@@ -655,6 +656,75 @@ async def get_release_decision_view(
     return view.model_dump(mode="json")
 
 
+@router.get(
+    "/{id}/workflow-status",
+    summary="Get Forge Workflow routing status for a release assessment (WO-092)",
+    dependencies=[Depends(require_permission(Permissions.SERVICE_VIEW))],
+)
+async def get_workflow_status(
+    id: uuid.UUID,
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> Any:
+    """Return the Forge Workflow routing state for a release assessment.
+
+    Looks up the most recent release_decision for the assessment and returns
+    its workflow_id, workflow_status, routing_method, reviewer_role,
+    decided_by, and decided_at from the Forge Workflow Engine.
+
+    Returns 404 when no decision has been submitted yet.
+    Returns 200 with routing_method='none' when the decision was APPROVE
+    (no workflow triggered).
+    """
+    from forgeguard.data.repositories.decisions import DecisionRepository  # noqa: PLC0415
+    from forgeguard.services.forge_workflow import (  # noqa: PLC0415
+        ForgeWorkflowAdapter,
+        ForgeWorkflowHttpAdapter,
+    )
+
+    decision_repo = DecisionRepository(pool)
+    decisions = await decision_repo.find_by_release_assessment(id)
+
+    if not decisions:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "not_found",
+                "message": f"No decision found for assessment {id}",
+            },
+        )
+
+    decision = decisions[-1]
+    decision_outcome = decision.get("decision", "")
+    was_escalated = decision.get("was_escalated", False)
+
+    reviewer_role = ForgeWorkflowAdapter.determine_reviewer_role(
+        decision_outcome,
+        findings=(
+            [{"severity": "CRITICAL", "dimension": "SECURITY"}]
+            if was_escalated else []
+        ),
+    )
+
+    workflow_status_val = decision.get("workflow_status")
+    if workflow_status_val is None and decision_outcome not in ("CONDITIONAL_APPROVE", "BLOCK"):
+        workflow_status_val = "not_required"
+
+    return {
+        "assessment_id": str(id),
+        "decision_id": str(decision["id"]),
+        "decision": decision_outcome,
+        "workflow_id": str(decision["workflow_id"]) if decision.get("workflow_id") else None,
+        "workflow_status": workflow_status_val,
+        "routing_method": decision.get("routing_method"),
+        "reviewer_role": reviewer_role,
+        "workflow_timeout_at": (
+            decision["workflow_timeout_at"].isoformat()
+            if decision.get("workflow_timeout_at") and hasattr(decision["workflow_timeout_at"], "isoformat")
+            else None
+        ),
+    }
+
+
 @router.post(
     "/{id}/decide",
     response_model=ReleaseDecisionResponse,
@@ -666,6 +736,7 @@ async def decide_release(
     id: uuid.UUID,
     body: ReleaseDecisionRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     pool: asyncpg.Pool = Depends(get_pool),
     audit_svc: AuditService = Depends(get_audit_service),
 ) -> ReleaseDecisionResponse:
@@ -866,6 +937,43 @@ async def decide_release(
                 decision_id=str(decision_id),
                 assessment_id=str(id),
             )
+
+    # 11. Trigger Forge Workflow asynchronously for CONDITIONAL_APPROVE or BLOCK (WO-092).
+    #     APPROVE decisions skip workflow creation.
+    try:
+        from forgeguard.services.forge_workflow import trigger_workflow_for_decision  # noqa: PLC0415
+
+        workflow_context: dict[str, Any] = {
+            "assessment_id": str(id),
+            "service_id": str(assessment.get("service_id", "")),
+            "health_score": float(health_d),
+            "risk_score": float(risk_d),
+            "decision": body.decision.value,
+            "was_escalated": escalation.should_escalate,
+        }
+        background_tasks.add_task(
+            trigger_workflow_for_decision,
+            adapter=get_workflow_adapter(),
+            decision_repo=decision_repo,
+            decision_id=decision_id,
+            assessment_id=id,
+            decision=body.decision.value,
+            findings=[
+                {
+                    "severity": f.severity,
+                    "dimension": f.dimension,
+                }
+                for f in findings
+            ],
+            context=workflow_context,
+            audit_svc=audit_svc,
+        )
+    except Exception as _wf_exc:
+        logger.warning(
+            "releases.decide.workflow_hook_failed",
+            decision_id=str(decision_id),
+            error=str(_wf_exc),
+        )
 
     logger.info(
         "releases.decide.completed",
