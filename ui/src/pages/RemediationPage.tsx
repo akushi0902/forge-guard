@@ -1,14 +1,18 @@
 /**
- * Remediation placeholder page — to be implemented in later WOs.
+ * Remediation page — placeholder; shows empty state until remediation listing is implemented.
  */
 import { type JSX } from 'react';
-import { Stack, Text, Title } from '@mantine/core';
+import { Stack, Title } from '@mantine/core';
+import { useNavigate } from 'react-router-dom';
+import { RemediationEmptyState } from '@/components/empty-states/RemediationEmptyState';
 
 export function RemediationPage(): JSX.Element {
+  const navigate = useNavigate();
+
   return (
     <Stack gap="md">
       <Title order={2}>Remediation</Title>
-      <Text c="dimmed">Remediation tracking — coming soon.</Text>
+      <RemediationEmptyState onViewFindings={() => void navigate('/health')} />
     </Stack>
   );
 }
