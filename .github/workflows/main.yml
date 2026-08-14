@@ -22,10 +22,53 @@ jobs:
   preview:
     runs-on: ubuntu-latest
     timeout-minutes: 25 # hard ceiling: 15 min preview + build/teardown headroom
+    permissions:
+      contents: write # needed to commit ui/package-lock.json back to the branch
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # ---------------------------------------------------------------- #
+      # 0. Keep ui/package-lock.json in sync with ui/package.json.
+      #    `npm ci` in ui/Dockerfile refuses to install if the lockfile is
+      #    missing or out of sync with package.json — this step regenerates
+      #    it whenever that happens and commits the real, registry-verified
+      #    file straight back to the branch, so the Docker build always has
+      #    a lockfile that actually matches.
+      # ---------------------------------------------------------------- #
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Sync ui/package-lock.json
+        working-directory: ui
+        run: |
+          set -euo pipefail
+
+          BEFORE_HASH=""
+          if [ -f package-lock.json ]; then
+            BEFORE_HASH="$(sha256sum package-lock.json | cut -d' ' -f1)"
+          else
+            echo ":information_source: ui/package-lock.json does not exist yet — generating it."
+          fi
+
+          npm install --package-lock-only
+
+          AFTER_HASH="$(sha256sum package-lock.json | cut -d' ' -f1)"
+
+          if [ "$BEFORE_HASH" = "$AFTER_HASH" ]; then
+            echo "✓ ui/package-lock.json already in sync — nothing to commit."
+            exit 0
+          fi
+
+          echo "✓ ui/package-lock.json was missing or out of sync — committing the regenerated file."
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore(ui): sync package-lock.json [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       # ---------------------------------------------------------------- #
       # 1. Local, job-scoped secrets — never persisted, never logged.
