@@ -1,0 +1,209 @@
+name: Preview via Cloudflare Tunnel (15 min)
+
+# Manually triggered — spins up the full ForgeGuard stack (Postgres + FastAPI
+# backend + Nginx/React frontend) inside the runner, exposes it to the public
+# internet through an ephemeral Cloudflare "quick tunnel" for exactly 15
+# minutes, then tears everything down. No Cloudflare account or API token is
+# required — quick tunnels are anonymous and free.
+#
+# Usage: Actions tab → "Preview via Cloudflare Tunnel (15 min)" → Run workflow
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: forgeguard-preview-tunnel
+  cancel-in-progress: true
+
+env:
+  PREVIEW_MINUTES: 15
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25 # hard ceiling: 15 min preview + build/teardown headroom
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------------- #
+      # 1. Local, job-scoped secrets — never persisted, never logged.
+      #    docker-compose.yml requires POSTGRES_PASSWORD / JWT_SECRET_KEY;
+      #    we generate strong random ones for this ephemeral run only.
+      # ---------------------------------------------------------------- #
+      - name: Generate ephemeral .env
+        env:
+          # Optional — set this as a repo/environment secret to enable real
+          # AI-powered features in the preview. Safe to leave unset: the
+          # backend's LLM_API_KEY defaults to "" and falls back to template
+          # mode, so the workflow never fails over a missing key.
+          LLM_API_KEY_SECRET: ${{ secrets.LLM_API_KEY }}
+        run: |
+          set -euo pipefail
+          PG_PASSWORD="$(openssl rand -hex 24)"
+          JWT_SECRET="$(openssl rand -hex 32)"
+
+          cp .env.example .env
+          sed -i "s#^POSTGRES_PASSWORD=.*#POSTGRES_PASSWORD=${PG_PASSWORD}#" .env
+          sed -i "s#^JWT_SECRET_KEY=.*#JWT_SECRET_KEY=${JWT_SECRET}#" .env
+          sed -i "s#^DATABASE_URL=.*#DATABASE_URL=postgresql+asyncpg://forgeguard:${PG_PASSWORD}@forgeguard-db:5432/forgeguard_dev#" .env
+          sed -i "s#^APP_ENV=.*#APP_ENV=staging#" .env
+
+          # Mask the generated secrets so they never appear in logs.
+          echo "::add-mask::${PG_PASSWORD}"
+          echo "::add-mask::${JWT_SECRET}"
+
+          if [ -n "${LLM_API_KEY_SECRET}" ]; then
+            sed -i "s#^LLM_API_KEY=.*#LLM_API_KEY=${LLM_API_KEY_SECRET}#" .env
+            echo "::add-mask::${LLM_API_KEY_SECRET}"
+            echo "✓ LLM_API_KEY secret found — AI features enabled for this preview."
+          else
+            echo ":information_source: No LLM_API_KEY secret set — AI features will use template fallbacks (this is not an error)."
+          fi
+
+      - name: Generate self-signed dev TLS certs
+        run: bash scripts/generate-dev-certs.sh
+
+      # ---------------------------------------------------------------- #
+      # 2. Build and start the full stack (db → migration → backend →
+      #    frontend), then wait on the healthchecks already defined in
+      #    docker-compose.yml before doing anything else.
+      # ---------------------------------------------------------------- #
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify Docker Compose version
+        run: |
+          set -euo pipefail
+          docker compose version
+          # docker-compose.yml relies on `service_completed_successfully`,
+          # which requires Compose v2.20+. ubuntu-latest ships a recent v2
+          # by default, but fail fast with a clear message if that changes.
+          COMPOSE_VER="$(docker compose version --short)"
+          MAJOR="$(echo "$COMPOSE_VER" | cut -d. -f1)"
+          MINOR="$(echo "$COMPOSE_VER" | cut -d. -f2)"
+          if [ "$MAJOR" -lt 2 ] || { [ "$MAJOR" -eq 2 ] && [ "$MINOR" -lt 20 ]; }; then
+            echo "✗ Docker Compose ${COMPOSE_VER} found, but 2.20+ is required."
+            exit 1
+          fi
+
+      - name: Build and start stack
+        run: |
+          set -euo pipefail
+          # Retry once on transient build/pull failures (registry hiccups,
+          # network blips) before giving up.
+          docker compose up --build -d || {
+            echo "First attempt failed — retrying once...";
+            docker compose down -v --remove-orphans || true;
+            docker compose up --build -d;
+          }
+
+      - name: Wait for backend + frontend health
+        run: |
+          set -euo pipefail
+          echo "Waiting for stack to become healthy..."
+          for i in $(seq 1 60); do
+            BACKEND_OK=false
+            FRONTEND_OK=false
+
+            if curl -sf -k https://localhost/api/v1/health >/dev/null 2>&1; then
+              BACKEND_OK=true
+            fi
+            if curl -sf -k https://localhost/health >/dev/null 2>&1; then
+              FRONTEND_OK=true
+            fi
+
+            if [ "$BACKEND_OK" = true ] && [ "$FRONTEND_OK" = true ]; then
+              echo "✓ Backend and frontend are healthy."
+              exit 0
+            fi
+
+            echo "  [$i/60] not ready yet — retrying in 5s..."
+            sleep 5
+          done
+
+          echo "✗ Stack did not become healthy in time. Dumping logs:"
+          docker compose logs --tail=200
+          exit 1
+
+      # ---------------------------------------------------------------- #
+      # 3. Install cloudflared and open a quick tunnel to the Nginx
+      #    frontend (self-signed cert → --no-tls-verify on the tunnel's
+      #    origin connection only; traffic to the public URL is normal
+      #    HTTPS terminated by Cloudflare's edge).
+      # ---------------------------------------------------------------- #
+      - name: Install cloudflared
+        run: |
+          set -euo pipefail
+          curl -sSL -o cloudflared.deb \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb || sudo apt-get install -f -y
+          cloudflared --version
+
+      - name: Start Cloudflare quick tunnel
+        run: |
+          set -euo pipefail
+          nohup cloudflared tunnel \
+            --url https://localhost:443 \
+            --no-tls-verify \
+            --no-autoupdate \
+            > cloudflared.log 2>&1 &
+          echo $! > cloudflared.pid
+
+          echo "Waiting for tunnel URL..."
+          for i in $(seq 1 30); do
+            if grep -qo 'https://[a-zA-Z0-9.-]*\.trycloudflare\.com' cloudflared.log; then
+              break
+            fi
+            sleep 2
+          done
+
+          TUNNEL_URL="$(grep -o 'https://[a-zA-Z0-9.-]*\.trycloudflare\.com' cloudflared.log | head -n1)"
+
+          if [ -z "$TUNNEL_URL" ]; then
+            echo "✗ Failed to obtain tunnel URL. cloudflared log:"
+            cat cloudflared.log
+            exit 1
+          fi
+
+          echo "TUNNEL_URL=${TUNNEL_URL}" >> "$GITHUB_ENV"
+          echo "✓ Tunnel live at: ${TUNNEL_URL}"
+
+      - name: Publish preview link
+        run: |
+          {
+            echo "## :rocket: ForgeGuard live preview"
+            echo ""
+            echo "**URL:** ${TUNNEL_URL}"
+            echo "**API docs:** ${TUNNEL_URL}/api/v1/docs"
+            echo ""
+            echo "This tunnel is active for ${PREVIEW_MINUTES} minutes from workflow start,"
+            echo "then it and the underlying stack are automatically torn down."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ---------------------------------------------------------------- #
+      # 4. Keep the tunnel + stack alive for exactly PREVIEW_MINUTES.
+      # ---------------------------------------------------------------- #
+      - name: Hold preview window open
+        run: |
+          echo "Preview live at ${TUNNEL_URL} — holding for ${PREVIEW_MINUTES} minutes."
+          sleep $(( PREVIEW_MINUTES * 60 ))
+
+      # ---------------------------------------------------------------- #
+      # 5. Always clean up, even if a previous step failed.
+      # ---------------------------------------------------------------- #
+      - name: Stop tunnel
+        if: always()
+        run: |
+          if [ -f cloudflared.pid ]; then
+            kill "$(cat cloudflared.pid)" 2>/dev/null || true
+          fi
+
+      - name: Dump stack logs (on failure)
+        if: failure()
+        run: docker compose logs --tail=300
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v --remove-orphans
