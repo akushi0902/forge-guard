@@ -70,10 +70,16 @@ RUN apk add --no-cache openssl && \
     chmod 600 /etc/nginx/ssl/key.pem && \
     chmod 644 /etc/nginx/ssl/cert.pem
 
-# ---- Nginx config syntax validation ------------------------------------- #
-# Fail the build early if the Nginx configuration has syntax errors.
-
-#RUN nginx -t
+# ---- Nginx config syntax validation --------------------------------------#
+# NOTE: nginx -t is intentionally NOT run here at build time. This config
+# references the Docker Compose service name `forgeguard-backend` in an
+# `upstream` block, which nginx resolves at config-load time — but that
+# hostname only exists on the `forgeguard-net` Compose network, which the
+# isolated build container is never attached to. Running `nginx -t` here
+# always fails with "host not found in upstream", even for a valid config.
+# Real validation happens in the CMD below, at container start, once the
+# container has actually joined the Compose network and the hostname
+# resolves — that's the earliest point this config can be truthfully tested.
 
 # ---- React SPA bundle --------------------------------------------------- #
 COPY --from=builder /app/dist /usr/share/nginx/html
@@ -81,5 +87,9 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Nginx listens on port 80 (HTTP → redirect) and 443 (HTTPS).
 EXPOSE 80 443
 
-# Run Nginx in the foreground (required for Docker PID 1).
-CMD ["nginx", "-g", "daemon off;"]
+# Validate config, then run Nginx in the foreground (required for Docker PID 1).
+# `nginx -t` here runs after the container has joined the Compose network, so
+# the `forgeguard-backend` upstream hostname resolves and the check is real —
+# a genuinely broken config still fails fast, with a clear error in
+# `docker compose logs`, instead of the container silently crash-looping.
+CMD ["sh", "-c", "nginx -t && exec nginx -g 'daemon off;'"]
