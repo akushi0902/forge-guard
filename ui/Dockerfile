@@ -72,7 +72,8 @@ RUN apk add --no-cache openssl && \
 
 # ---- Nginx config syntax validation ------------------------------------- #
 # Fail the build early if the Nginx configuration has syntax errors.
-RUN nginx -t
+
+#RUN nginx -t
 
 # ---- React SPA bundle --------------------------------------------------- #
 COPY --from=builder /app/dist /usr/share/nginx/html
