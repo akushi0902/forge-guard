@@ -37,7 +37,7 @@ def _run_coro_isolated(coro: Coroutine[Any, Any, Any]) -> Any:
     ``RuntimeError: This event loop is already running``. Executing the
     coroutine on its own loop in a separate thread avoids that collision.
 
-    NOTE: ``seed()`` must create/own its own async engine from the DSN and
+    NOTE: ``seed()`` must create/own its own async connection from the DSN and
     must NOT reuse Alembic's bound connection (it doesn't — it takes a URL).
     """
     result: dict[str, Any] = {}
@@ -66,12 +66,23 @@ def _run_coro_isolated(coro: Coroutine[Any, Any, Any]) -> Any:
     return result.get("value")
 
 
+def _asyncpg_dsn_from_bind() -> str:
+    """Build a plain-asyncpg DSN from Alembic's bound engine URL.
+
+    Two critical fixes vs. ``str(bind.engine.url)``:
+      1. ``str(URL)`` / ``__str__`` REDACTS the password as '***'. We must
+         render with ``hide_password=False`` or asyncpg authenticates with
+         the literal string '***' -> InvalidPasswordError.
+      2. asyncpg.connect(dsn=...) expects a bare 'postgresql://' scheme, not
+         SQLAlchemy's 'postgresql+asyncpg'. Normalise the drivername.
+    """
+    url = op.get_bind().engine.url.set(drivername="postgresql")
+    return url.render_as_string(hide_password=False)
+
+
 def upgrade() -> None:
     """Run the seed script against the current migration database URL."""
-    # Resolve DSN from the Alembic connection. The engine is already configured
-    # by alembic/env.py from get_settings().database_url.
-    bind = op.get_bind()
-    raw_url = str(bind.engine.url)
+    raw_url = _asyncpg_dsn_from_bind()
 
     async def _run() -> None:
         from forgeguard.data.seeds.seed_data import seed  # noqa: PLC0415
