@@ -1,5 +1,5 @@
 /**
- * ScoreComparisonCard — before/after health score comparison with action buttons.
+* ScoreComparisonCard — before/after health score comparison with action buttons.
  *
  * Contains:
  *   BeforeAfterGrid — two-column grid showing score values with delta indicator.
@@ -92,7 +92,7 @@ function BeforeAfterGrid({
             <Text
               size="2rem"
               fw={700}
-              c={result.before_health_score === null ? 'dimmed' : undefined}
+              {...(result.before_health_score === null ? { c: 'dimmed' as const } : {})}
               data-testid="before-score"
             >
               {result.before_health_score !== null
