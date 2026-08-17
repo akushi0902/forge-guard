@@ -1,5 +1,5 @@
 /**
- * TanStack Query hooks for the Security Review page (WO-077).
+* TanStack Query hooks for the Security Review page (WO-077).
  *
  * Endpoints:
  *   GET /api/v1/findings?dimension=security&severity=critical,high
@@ -76,7 +76,7 @@ export const securityKeys = {
 
 export interface SecurityFindingsFilters {
   severity?: string;
-  status?: string;
+  status?: string | undefined;
   sort_by?: string;
   sort_dir?: 'asc' | 'desc';
   limit?: number;
