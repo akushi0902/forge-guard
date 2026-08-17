@@ -1,5 +1,5 @@
 /**
- * ForgeGuard auth store.
+* ForgeGuard auth store.
  *
  * Design:
  *  - Persists only non-sensitive data (user profile, isAuthenticated) to
@@ -14,7 +14,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { apiClient } from '@/lib/api-client';
 import { type Role } from '@/types';
 
 // ---------------------------------------------------------------------------
