@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
+import threading
+from typing import Any, Coroutine
 
+import sqlalchemy as sa
 from alembic import op
 
 logger = logging.getLogger(__name__)
@@ -26,17 +28,54 @@ branch_labels: str | None = None
 depends_on: str | None = None
 
 
+def _run_coro_isolated(coro: Coroutine[Any, Any, Any]) -> Any:
+    """Run *coro* to completion on a fresh event loop in a dedicated thread.
+
+    Alembic's env.py already drives migrations under a running event loop
+    (``asyncio.run(run_async_migrations())`` -> ``connection.run_sync(...)``),
+    so calling ``run_until_complete`` on the current thread raises
+    ``RuntimeError: This event loop is already running``. Executing the
+    coroutine on its own loop in a separate thread avoids that collision.
+
+    NOTE: ``seed()`` must create/own its own async engine from the DSN and
+    must NOT reuse Alembic's bound connection (it doesn't — it takes a URL).
+    """
+    result: dict[str, Any] = {}
+    error: dict[str, BaseException] = {}
+
+    def _worker() -> None:
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            result["value"] = loop.run_until_complete(coro)
+        except BaseException as exc:  # noqa: BLE001 - re-raised on caller thread
+            error["value"] = exc
+        finally:
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            finally:
+                asyncio.set_event_loop(None)
+                loop.close()
+
+    thread = threading.Thread(target=_worker, name="forgeguard-seed", daemon=True)
+    thread.start()
+    thread.join()
+
+    if "value" in error:
+        raise error["value"]
+    return result.get("value")
+
+
 def upgrade() -> None:
     """Run the seed script against the current migration database URL."""
-    from alembic import op as _op  # noqa: PLC0415
-
-    # Resolve DSN from Alembic connection.  The engine is already configured
+    # Resolve DSN from the Alembic connection. The engine is already configured
     # by alembic/env.py from get_settings().database_url.
     bind = op.get_bind()
     raw_url = str(bind.engine.url)
 
     async def _run() -> None:
         from forgeguard.data.seeds.seed_data import seed  # noqa: PLC0415
+
         summary = await seed(raw_url)
         if summary.failed:
             logger.warning(
@@ -45,7 +84,8 @@ def upgrade() -> None:
                 sum(summary.failed.values()),
             )
 
-    asyncio.get_event_loop().run_until_complete(_run())
+    # Do NOT re-enter Alembic's already-running loop; run on an isolated loop.
+    _run_coro_isolated(_run())
 
 
 def downgrade() -> None:
@@ -85,20 +125,49 @@ def downgrade() -> None:
 
     bind = op.get_bind()
 
-    def _ids(*ids: str) -> str:
-        return ", ".join(f"'{i}'" for i in ids)
+    def _delete(table: str, column: str, ids: tuple[str, ...]) -> None:
+        """Parameterised, dialect-safe bulk delete by ID list."""
+        if not ids:
+            return
+        stmt = sa.text(
+            f"DELETE FROM {table} WHERE {column} IN :ids"
+        ).bindparams(sa.bindparam("ids", expanding=True))
+        bind.execute(stmt, {"ids": list(ids)})
 
-    bind.execute(f"DELETE FROM exceptions WHERE id IN ({_ids(EXCEPTION_API_DOCS_ID)})")
-    bind.execute(f"DELETE FROM remediation_recommendations WHERE id IN ({_ids(RECOMMENDATION_CVE_ID, RECOMMENDATION_COVERAGE_ID)})")
-    bind.execute(f"DELETE FROM release_decisions WHERE id IN ({_ids(RELEASE_DECISION_ID)})")
-    bind.execute(f"DELETE FROM release_assessments WHERE id IN ({_ids(RELEASE_ASSESSMENT_ID)})")
-    bind.execute(f"DELETE FROM findings WHERE id IN ({_ids(FINDING_CVE_ID, FINDING_COVERAGE_ID, FINDING_API_DOCS_ID, FINDING_RUNBOOK_ID, FINDING_COMPLEXITY_ID)})")
-    bind.execute(f"DELETE FROM assessment_scores WHERE id IN ({_ids(SCORE_HEALTH_ID)})")
-    bind.execute(f"DELETE FROM assessments WHERE id IN ({_ids(ASSESSMENT_HEALTH_ID)})")
-    bind.execute(f"DELETE FROM policy_rules WHERE id IN ({_ids(RULE_CQ_COMPLEXITY_ID, RULE_CQ_DUPLICATION_ID, RULE_CQ_LINT_ID, RULE_TC_UNIT_ID, RULE_TC_INTEGRATION_ID, RULE_TC_BRANCH_ID, RULE_SEC_CVE_ID, RULE_SEC_SECRETS_ID, RULE_SEC_SAST_ID, RULE_DOC_API_ID, RULE_DOC_RUNBOOK_ID, RULE_DOC_ADR_ID, RULE_OPS_ALERTS_ID, RULE_OPS_DASHBOARDS_ID, RULE_OPS_ONBOARDING_ID)})")
-    bind.execute(f"DELETE FROM policies WHERE id IN ({_ids(POLICY_CODE_QUALITY_ID, POLICY_TEST_COVERAGE_ID, POLICY_SECURITY_ID, POLICY_DOCUMENTATION_ID, POLICY_OPS_READINESS_ID)})")
-    bind.execute(f"DELETE FROM services WHERE id IN ({_ids(SERVICE_PAYMENT_ID, SERVICE_API_GATEWAY_ID, SERVICE_AUTH_ID)})")
-    bind.execute(f"DELETE FROM role_permissions WHERE role_id IN ({_ids(ROLE_DEVELOPER_ID, ROLE_TECHLEAD_ID, ROLE_SECURITY_ID, ROLE_ADMIN_ID, ROLE_MANAGER_ID, ROLE_OPERATOR_ID)})")
-    bind.execute(f"DELETE FROM users WHERE id IN ({_ids(USER_DEVELOPER_ID, USER_TECHLEAD_ID, USER_SECURITY_ID, USER_ADMIN_ID, USER_MANAGER_ID, USER_OPERATOR_ID)})")
-    bind.execute(f"DELETE FROM permissions WHERE id IN ({_ids(PERM_ASSESSMENT_VIEW_ID, PERM_ASSESSMENT_CREATE_ID, PERM_POLICY_VIEW_ID, PERM_POLICY_MANAGE_ID, PERM_RELEASE_VIEW_ID, PERM_RELEASE_APPROVE_ID, PERM_FINDING_VIEW_ID, PERM_EXCEPTION_REQUEST_ID, PERM_EXCEPTION_APPROVE_ID, PERM_ADMIN_MANAGE_ID)})")
-    bind.execute(f"DELETE FROM roles WHERE id IN ({_ids(ROLE_DEVELOPER_ID, ROLE_TECHLEAD_ID, ROLE_SECURITY_ID, ROLE_ADMIN_ID, ROLE_MANAGER_ID, ROLE_OPERATOR_ID)})")
+    # Delete in FK-safe order (children first, parents last).
+    _delete("exceptions", "id", (EXCEPTION_API_DOCS_ID,))
+    _delete("remediation_recommendations", "id",
+            (RECOMMENDATION_CVE_ID, RECOMMENDATION_COVERAGE_ID))
+    _delete("release_decisions", "id", (RELEASE_DECISION_ID,))
+    _delete("release_assessments", "id", (RELEASE_ASSESSMENT_ID,))
+    _delete("findings", "id",
+            (FINDING_CVE_ID, FINDING_COVERAGE_ID, FINDING_API_DOCS_ID,
+             FINDING_RUNBOOK_ID, FINDING_COMPLEXITY_ID))
+    _delete("assessment_scores", "id", (SCORE_HEALTH_ID,))
+    _delete("assessments", "id", (ASSESSMENT_HEALTH_ID,))
+    _delete("policy_rules", "id",
+            (RULE_CQ_COMPLEXITY_ID, RULE_CQ_DUPLICATION_ID, RULE_CQ_LINT_ID,
+             RULE_TC_UNIT_ID, RULE_TC_INTEGRATION_ID, RULE_TC_BRANCH_ID,
+             RULE_SEC_CVE_ID, RULE_SEC_SECRETS_ID, RULE_SEC_SAST_ID,
+             RULE_DOC_API_ID, RULE_DOC_RUNBOOK_ID, RULE_DOC_ADR_ID,
+             RULE_OPS_ALERTS_ID, RULE_OPS_DASHBOARDS_ID, RULE_OPS_ONBOARDING_ID))
+    _delete("policies", "id",
+            (POLICY_CODE_QUALITY_ID, POLICY_TEST_COVERAGE_ID, POLICY_SECURITY_ID,
+             POLICY_DOCUMENTATION_ID, POLICY_OPS_READINESS_ID))
+    _delete("services", "id",
+            (SERVICE_PAYMENT_ID, SERVICE_API_GATEWAY_ID, SERVICE_AUTH_ID))
+    _delete("role_permissions", "role_id",
+            (ROLE_DEVELOPER_ID, ROLE_TECHLEAD_ID, ROLE_SECURITY_ID,
+             ROLE_ADMIN_ID, ROLE_MANAGER_ID, ROLE_OPERATOR_ID))
+    _delete("users", "id",
+            (USER_DEVELOPER_ID, USER_TECHLEAD_ID, USER_SECURITY_ID,
+             USER_ADMIN_ID, USER_MANAGER_ID, USER_OPERATOR_ID))
+    _delete("permissions", "id",
+            (PERM_ASSESSMENT_VIEW_ID, PERM_ASSESSMENT_CREATE_ID,
+             PERM_POLICY_VIEW_ID, PERM_POLICY_MANAGE_ID,
+             PERM_RELEASE_VIEW_ID, PERM_RELEASE_APPROVE_ID,
+             PERM_FINDING_VIEW_ID, PERM_EXCEPTION_REQUEST_ID,
+             PERM_EXCEPTION_APPROVE_ID, PERM_ADMIN_MANAGE_ID))
+    _delete("roles", "id",
+            (ROLE_DEVELOPER_ID, ROLE_TECHLEAD_ID, ROLE_SECURITY_ID,
+             ROLE_ADMIN_ID, ROLE_MANAGER_ID, ROLE_OPERATOR_ID))
