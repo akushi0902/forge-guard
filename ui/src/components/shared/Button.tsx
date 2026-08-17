@@ -14,12 +14,13 @@ import {
   Button as MantineButton,
   type ButtonProps as MantineButtonProps,
 } from '@mantine/core';
-import { forwardRef } from 'react';
+import { forwardRef, type ComponentPropsWithoutRef } from 'react';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive';
 
 export interface ButtonProps
-  extends Omit<MantineButtonProps, 'variant' | 'color'> {
+  extends Omit<MantineButtonProps, 'variant' | 'color'>,
+    Omit<ComponentPropsWithoutRef<'button'>, 'color'> {
   /** Visual style of the button. */
   variant?: ButtonVariant;
 }
