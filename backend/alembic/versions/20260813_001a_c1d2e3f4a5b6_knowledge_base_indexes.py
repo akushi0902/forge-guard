@@ -1,7 +1,7 @@
 """Add composite indexes for knowledge base retrieval performance (WO-067).
 
 Revision ID: c1d2e3f4a5b6
-Revises: b2c3d4e5f6a7
+Revises: b0c1d2e3f4a5
 Create Date: 2026-08-13
 
 Adds three composite indexes to support the 2-second latency SLA for
@@ -24,7 +24,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "c1d2e3f4a5b6"
-down_revision = "b2c3d4e5f6a7"
+down_revision = "b0c1d2e3f4a5"
 branch_labels = None
 depends_on = None
 
