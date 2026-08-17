@@ -5,13 +5,10 @@
  * consistent label / error / description prop pattern and ForgeGuard default
  * styling. All components forward refs and accept standard HTML attributes.
  */
-
 import {
   Checkbox,
-  type CheckboxProps,
   Group,
   Radio,
-  type RadioProps,
   Select as MantineSelect,
   type SelectProps as MantineSelectProps,
   Switch,
@@ -23,49 +20,37 @@ import {
   Stack,
 } from '@mantine/core';
 import { forwardRef } from 'react';
-
 // ---------------------------------------------------------------------------
 // TextInput
 // ---------------------------------------------------------------------------
-
 export type TextInputProps = MantineTextInputProps;
-
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
   (props, ref) => <MantineTextInput ref={ref} {...props} />,
 );
 TextInput.displayName = 'TextInput';
-
 // ---------------------------------------------------------------------------
 // Textarea
 // ---------------------------------------------------------------------------
-
 export type TextareaProps = MantineTextareaProps;
-
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
   (props, ref) => <MantineTextarea ref={ref} {...props} />,
 );
 Textarea.displayName = 'Textarea';
-
 // ---------------------------------------------------------------------------
 // Select
 // ---------------------------------------------------------------------------
-
 export type SelectProps = MantineSelectProps;
-
 export const Select = forwardRef<HTMLInputElement, SelectProps>(
   (props, ref) => <MantineSelect ref={ref} {...props} />,
 );
 Select.displayName = 'Select';
-
 // ---------------------------------------------------------------------------
 // Toggle (Switch)
 // ---------------------------------------------------------------------------
-
 export interface ToggleProps extends Omit<SwitchProps, 'checked' | 'onChange'> {
   checked?: boolean;
   onChange?: (checked: boolean) => void;
 }
-
 export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
   ({ onChange, ...rest }, ref) => (
     <Switch
@@ -76,17 +61,14 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
   ),
 );
 Toggle.displayName = 'Toggle';
-
 // ---------------------------------------------------------------------------
 // CheckboxGroup
 // ---------------------------------------------------------------------------
-
 export interface CheckboxOption {
   value: string;
   label: string;
   disabled?: boolean;
 }
-
 export interface CheckboxGroupProps {
   label?: string;
   options: CheckboxOption[];
@@ -94,7 +76,6 @@ export interface CheckboxGroupProps {
   onChange?: (value: string[]) => void;
   error?: string;
 }
-
 export function CheckboxGroup({
   label,
   options,
@@ -109,7 +90,6 @@ export function CheckboxGroup({
       : value.filter((v) => v !== optValue);
     onChange(next);
   };
-
   return (
     <Stack gap="xs">
       {label && <span style={{ fontSize: 14, fontWeight: 500 }}>{label}</span>}
@@ -126,17 +106,14 @@ export function CheckboxGroup({
     </Stack>
   );
 }
-
 // ---------------------------------------------------------------------------
 // RadioGroup
 // ---------------------------------------------------------------------------
-
 export interface RadioGroupOption {
   value: string;
   label: string;
   disabled?: boolean;
 }
-
 export interface RadioGroupProps {
   label?: string;
   options: RadioGroupOption[];
@@ -145,7 +122,6 @@ export interface RadioGroupProps {
   error?: string;
   name?: string;
 }
-
 export function RadioGroup({
   label,
   options,
