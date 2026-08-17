@@ -1,4 +1,4 @@
-import { Box, Text } from '@mantine/core';
+import { Box } from '@mantine/core';
 
 import { useAgentQuery } from '@/hooks/api/useAgentQuery';
 import { useConversations } from '@/hooks/api/useConversations';
