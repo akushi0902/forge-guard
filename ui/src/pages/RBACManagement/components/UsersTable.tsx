@@ -2,7 +2,6 @@ import { type JSX, useState } from 'react';
 import {
   Center,
   Select,
-  Stack,
   Table,
   Text,
   Tooltip,
