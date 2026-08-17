@@ -1,13 +1,19 @@
 """Create DECISION_ASSIGNMENTS table for workflow routing (WO-053).
 
-Revision ID: b2c3d4e5f6a7
-Revises: a1b2c3d4e5f6
+Revision ID: b0c1d2e3f4a5
+Revises: a9b0c1d2e3f4
 Create Date: 2026-08-12
 
 Tracks which reviewer role should act on each completed release assessment.
 The router assigns the decision to security_reviewer (escalated) or tech_lead
 (non-escalated) and monitors the assignment lifecycle: pending → completed /
 pending → expired.
+
+NOTE: This revision ID was originally "b2c3d4e5f6a7", an accidental
+duplicate of the governance_schema migration's ID (20260811_0001).
+Renamed to b0c1d2e3f4a5, and down_revision repointed to the renamed
+20260812_0018 migration, to break the resulting cycle in the revision
+graph.
 """
 
 from __future__ import annotations
@@ -16,8 +22,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "b2c3d4e5f6a7"
-down_revision = "a1b2c3d4e5f6"
+revision = "b0c1d2e3f4a5"
+down_revision = "a9b0c1d2e3f4"
 branch_labels = None
 depends_on = None
 
