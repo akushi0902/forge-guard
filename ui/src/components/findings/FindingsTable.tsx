@@ -108,8 +108,8 @@ function sortFindings(
         (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99);
       return diff * multiplier;
     }
-    const av = String((a as Record<string, unknown>)[key as string] ?? '');
-    const bv = String((b as Record<string, unknown>)[key as string] ?? '');
+    const av = String((a as unknown as Record<string, unknown>)[key as string] ?? '');
+    const bv = String((b as unknown as Record<string, unknown>)[key as string] ?? '');
     return av.localeCompare(bv) * multiplier;
   });
 }
