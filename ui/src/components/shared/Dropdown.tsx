@@ -16,7 +16,7 @@ export interface DropdownItem {
   divider?: boolean;
 }
 
-export interface DropdownProps extends Omit<MenuProps, 'children'> {
+export interface DropdownProps extends Omit<MenuProps, 'children' | 'trigger'> {
   /** The trigger element. */
   trigger: ReactNode;
   items: DropdownItem[];
