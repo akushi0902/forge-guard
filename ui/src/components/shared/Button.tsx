@@ -20,7 +20,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive';
 
 export interface ButtonProps
   extends Omit<MantineButtonProps, 'variant' | 'color'>,
-    Omit<ComponentPropsWithoutRef<'button'>, 'color'> {
+    Omit<ComponentPropsWithoutRef<'button'>, 'color' | 'style'> {
   /** Visual style of the button. */
   variant?: ButtonVariant;
 }
