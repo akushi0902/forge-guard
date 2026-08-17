@@ -42,7 +42,6 @@ import {
 import {
   createBrowserRouter,
   Outlet,
-  useRouteError,
 } from 'react-router-dom';
 
 import { AIChatFAB } from '@/components/AIChatFAB/AIChatFAB';
@@ -206,8 +205,6 @@ function guarded(permission: string, element: ReactNode): JSX.Element {
 // ---------------------------------------------------------------------------
 
 function RouteErrorElement(): JSX.Element {
-  const error = useRouteError();
-  const message = error instanceof Error ? error.message : String(error);
   return (
     <ForbiddenPage missingPermission={undefined} />
   );
