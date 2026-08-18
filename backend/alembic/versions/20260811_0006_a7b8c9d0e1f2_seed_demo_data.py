@@ -34,7 +34,13 @@ def upgrade() -> None:
     # Resolve DSN from Alembic connection.  The engine is already configured
     # by alembic/env.py from get_settings().database_url.
     bind = op.get_bind()
-    raw_url = str(bind.engine.url)
+    # NOTE: str(bind.engine.url) masks the password as "***" by design,
+    # to keep credentials out of logs/tracebacks. That masked string was
+    # being passed straight to a separate asyncpg.connect() call below,
+    # which then genuinely tried to authenticate with the literal
+    # password "***" — causing InvalidPasswordError. render_as_string
+    # with hide_password=False returns the real, connectable DSN.
+    raw_url = bind.engine.url.render_as_string(hide_password=False)
 
     async def _run() -> None:
         from forgeguard.data.seeds.seed_data import seed  # noqa: PLC0415
