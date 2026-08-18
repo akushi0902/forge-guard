@@ -92,7 +92,7 @@ def upgrade() -> None:
             '{_ANONYMIZED_USER_UUID}',
             '{_ANONYMIZED_USER_EMAIL}',
             '[Anonymized User]'::bytea,
-            '$2b$12$ANONYMIZED_USER_CANNOT_LOGIN_HASH_PLACEHOLDER_XXXXXXXXXXXX',
+            '$2b$12$AnonymizedUserCannotLogin0000000000000000000000000000',
             'system',
             false,
             0,
