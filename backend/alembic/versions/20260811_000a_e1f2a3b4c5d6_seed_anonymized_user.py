@@ -27,24 +27,14 @@ depends_on = None
 _ANONYMIZED_USER_UUID = "00000000-0000-0000-0000-000000000000"
 _ANONYMIZED_USER_EMAIL = "[anonymized]@system.internal"
 
-# bcrypt hashes are ALWAYS exactly 60 chars: "$2b$12$" (7) + 22-char salt +
-# 31-char digest. This placeholder is a structurally valid, 60-char bcrypt
-# string that no password will ever verify against, so the anonymized/system
-# account can never authenticate. Do NOT lengthen it — password_hash is
-# VARCHAR(60) and the old placeholder was 65 chars, causing
-# StringDataRightTruncationError.
-_ANONYMIZED_USER_PASSWORD_HASH = (
-    "$2b$12$AnonymizedUserCannotLoginPlaceholderHash0000000000000"
-)
-
 
 def upgrade() -> None:
     # ------------------------------------------------------------------
     # 1. Extend the users.role CHECK constraint to include 'system'.
     # ------------------------------------------------------------------
-    op.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS valid_role")
+    op.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_valid_role")
     op.execute(
-        "ALTER TABLE users ADD CONSTRAINT valid_role CHECK ("
+        "ALTER TABLE users ADD CONSTRAINT ck_users_valid_role CHECK ("
         "role IN ("
         "'developer','tech_lead','security_reviewer',"
         "'platform_admin','engineering_manager','operator','system'"
@@ -102,7 +92,7 @@ def upgrade() -> None:
             '{_ANONYMIZED_USER_UUID}',
             '{_ANONYMIZED_USER_EMAIL}',
             '[Anonymized User]'::bytea,
-            '{_ANONYMIZED_USER_PASSWORD_HASH}',
+            '$2b$12$ANONYMIZED_USER_CANNOT_LOGIN_HASH_PLACEHOLDER_XXXXXXXXXXXX',
             'system',
             false,
             0,
@@ -122,9 +112,9 @@ def downgrade() -> None:
     )
 
     # Revert the role CHECK constraint (remove 'system').
-    op.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS valid_role")
+    op.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_valid_role")
     op.execute(
-        "ALTER TABLE users ADD CONSTRAINT valid_role CHECK ("
+        "ALTER TABLE users ADD CONSTRAINT ck_users_valid_role CHECK ("
         "role IN ("
         "'developer','tech_lead','security_reviewer',"
         "'platform_admin','engineering_manager','operator'"
