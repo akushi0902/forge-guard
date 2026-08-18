@@ -113,6 +113,7 @@ def do_run_migrations(connection: Connection) -> None:
         target_metadata=target_metadata,
         naming_convention=NAMING_CONVENTION,
         compare_type=True,
+        transaction_per_migration=True,
     )
 
     with context.begin_transaction():
