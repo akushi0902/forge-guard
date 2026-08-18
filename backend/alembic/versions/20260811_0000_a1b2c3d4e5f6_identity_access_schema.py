@@ -155,7 +155,7 @@ def upgrade() -> None:
             "'developer','tech_lead','security_reviewer',"
             "'platform_admin','engineering_manager','operator'"
             ")",
-            name="ck_users_valid_role",
+            name="valid_role",
         ),
     )
     op.create_index("ix_users_email", "users", ["email"])
