@@ -75,14 +75,23 @@ async def _upsert_none(
     conflict_col: str,
     summary: SeedSummary,
 ) -> None:
-    """INSERT rows INTO table ON CONFLICT (conflict_col) DO NOTHING."""
+    """INSERT rows INTO table ON CONFLICT DO NOTHING.
+
+    Uses a bare ON CONFLICT DO NOTHING (no arbiter column) rather than
+    ON CONFLICT (conflict_col) DO NOTHING: a named arbiter only suppresses
+    a violation of that exact constraint — if the row also violates a
+    *different* unique constraint on the table (e.g. inserting the same
+    role name under a different id), Postgres still raises a hard error.
+    The bare form suppresses any unique/exclusion violation and does not
+    require a matching index to exist for the given column at all.
+    """
     for row in rows:
         cols = list(row.keys())
         placeholders = ", ".join(f"${i + 1}" for i in range(len(cols)))
         col_names = ", ".join(cols)
         q = (
             f"INSERT INTO {table} ({col_names}) VALUES ({placeholders}) "
-            f"ON CONFLICT ({conflict_col}) DO NOTHING"
+            f"ON CONFLICT DO NOTHING"
         )
         try:
             result = await conn.execute(q, *row.values())
@@ -103,15 +112,18 @@ async def _upsert_composite(
     conflict_cols: list[str],
     summary: SeedSummary,
 ) -> None:
-    """INSERT rows INTO table ON CONFLICT (col1, col2, ...) DO NOTHING."""
-    conflict = ", ".join(conflict_cols)
+    """INSERT rows INTO table ON CONFLICT DO NOTHING.
+
+    Uses a bare ON CONFLICT DO NOTHING for the same reason as
+    _upsert_none above — see that function's docstring.
+    """
     for row in rows:
         cols = list(row.keys())
         placeholders = ", ".join(f"${i + 1}" for i in range(len(cols)))
         col_names = ", ".join(cols)
         q = (
             f"INSERT INTO {table} ({col_names}) VALUES ({placeholders}) "
-            f"ON CONFLICT ({conflict}) DO NOTHING"
+            f"ON CONFLICT DO NOTHING"
         )
         try:
             result = await conn.execute(q, *row.values())
