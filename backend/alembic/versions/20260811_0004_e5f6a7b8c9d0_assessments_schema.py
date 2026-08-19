@@ -77,15 +77,15 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "assessment_type IN ('health_check','release_risk')",
-            name="ck_assessments_valid_assessment_type",
+            name="valid_assessment_type",
         ),
         sa.CheckConstraint(
             "trigger_type IN ('manual','scheduled','webhook')",
-            name="ck_assessments_valid_trigger_type",
+            name="valid_trigger_type",
         ),
         sa.CheckConstraint(
             "status IN ('pending','in_progress','completed','failed')",
-            name="ck_assessments_valid_assessment_status",
+            name="valid_assessment_status",
         ),
         sa.ForeignKeyConstraint(
             ["service_id"],
@@ -133,7 +133,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "overall_score >= 0 AND overall_score <= 100",
-            name="ck_assessment_scores_valid_score_range",
+            name="valid_score_range",
         ),
         sa.ForeignKeyConstraint(
             ["assessment_id"],
@@ -192,20 +192,20 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "severity IN ('critical','high','medium','low')",
-            name="ck_findings_valid_severity",
+            name="valid_severity",
         ),
         sa.CheckConstraint(
             "dimension IN ('code_quality','test_coverage','security',"
             "'documentation','operations_readiness')",
-            name="ck_findings_valid_dimension",
+            name="valid_dimension",
         ),
         sa.CheckConstraint(
             "status IN ('open','in_progress','resolved','suppressed')",
-            name="ck_findings_valid_finding_status",
+            name="valid_finding_status",
         ),
         sa.CheckConstraint(
             "confidence_score IS NULL OR (confidence_score >= 0 AND confidence_score <= 1)",
-            name="ck_findings_valid_confidence_score",
+            name="valid_confidence_score",
         ),
         sa.ForeignKeyConstraint(
             ["assessment_id"],
@@ -270,7 +270,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "status IN ('pending','in_progress','completed','failed')",
-            name="ck_release_assessments_valid_release_assessment_status",
+            name="valid_release_assessment_status",
         ),
         sa.ForeignKeyConstraint(
             ["service_id"],
@@ -331,15 +331,15 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "decision IN ('APPROVE','CONDITIONAL_APPROVE','BLOCK')",
-            name="ck_release_decisions_valid_decision",
+            name="valid_decision",
         ),
         sa.CheckConstraint(
             "health_score_at_decision >= 0 AND health_score_at_decision <= 100",
-            name="ck_release_decisions_valid_health_score_at_decision",
+            name="valid_health_score_at_decision",
         ),
         sa.CheckConstraint(
             "risk_score_at_decision >= 0 AND risk_score_at_decision <= 100",
-            name="ck_release_decisions_valid_risk_score_at_decision",
+            name="valid_risk_score_at_decision",
         ),
         sa.ForeignKeyConstraint(
             ["release_assessment_id"],
@@ -392,4 +392,4 @@ def downgrade() -> None:
     op.drop_table("release_assessments")
     op.drop_table("findings")
     op.drop_table("assessment_scores")
-    op.drop_table("assessments")
+    op.drop_table("assessments") 
