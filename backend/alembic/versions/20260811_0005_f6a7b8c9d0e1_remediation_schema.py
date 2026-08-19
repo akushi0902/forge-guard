@@ -57,11 +57,11 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "source IN ('ai_generated','template_fallback','manual')",
-            name="ck_remediation_recommendations_valid_source",
+            name="valid_source",
         ),
         sa.CheckConstraint(
             "confidence_score IS NULL OR (confidence_score >= 0 AND confidence_score <= 1)",
-            name="ck_remediation_recommendations_valid_confidence_score",
+            name="valid_confidence_score",
         ),
         sa.ForeignKeyConstraint(
             ["finding_id"],
@@ -115,7 +115,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "status IN ('requested','approved','denied','expired')",
-            name="ck_exceptions_valid_exception_status",
+            name="valid_exception_status",
         ),
         sa.ForeignKeyConstraint(
             ["finding_id"],
