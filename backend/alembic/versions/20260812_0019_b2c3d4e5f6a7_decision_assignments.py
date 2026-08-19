@@ -80,7 +80,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "status IN ('pending', 'completed', 'expired')",
-            name="ck_decision_assignments_status",
+            name="status",
         ),
     )
 
