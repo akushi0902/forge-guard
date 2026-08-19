@@ -105,7 +105,7 @@ def downgrade() -> None:
     op.drop_table("webhook_events")
 
     op.drop_constraint(
-        "valid_release_assessment_trigger_type",
+        "ck_release_assessments_valid_release_assessment_trigger_type",
         "release_assessments",
         type_="check",
     )
