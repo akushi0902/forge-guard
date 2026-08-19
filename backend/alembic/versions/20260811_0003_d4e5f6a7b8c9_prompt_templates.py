@@ -78,11 +78,11 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "dimension IN ('code_quality','test_coverage','security',"
             "'documentation','operations_readiness')",
-            name="ck_prompt_templates_valid_dimension",
+            name="valid_dimension",
         ),
         sa.CheckConstraint(
             "severity_level IN ('critical','high','medium','low')",
-            name="ck_prompt_templates_valid_severity_level",
+            name="valid_severity_level",
         ),
         sa.UniqueConstraint("name", "version", name="uq_prompt_templates_name_version"),
     )
