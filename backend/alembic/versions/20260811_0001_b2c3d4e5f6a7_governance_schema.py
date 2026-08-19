@@ -128,7 +128,7 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "dimension IN ('code_quality','test_coverage','security',"
             "'documentation','operations_readiness')",
-            name="ck_policies_valid_dimension",
+            name="valid_dimension",
         ),
         sa.ForeignKeyConstraint(
             ["service_id"],
@@ -196,7 +196,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "severity IN ('critical','high','medium','low')",
-            name="ck_policy_rules_valid_severity",
+            name="valid_severity",
         ),
         sa.ForeignKeyConstraint(
             ["policy_id"],
