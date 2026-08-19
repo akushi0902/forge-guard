@@ -47,7 +47,7 @@ def upgrade() -> None:
     # Extend status CHECK to accept 'pending' as an alias for the initial state.
     op.drop_constraint("ck_exceptions_valid_exception_status", "exceptions", type_="check")
     op.create_check_constraint(
-        "ck_exceptions_valid_exception_status",
+        "valid_exception_status",
         "exceptions",
         _NEW_STATUS_CHECK,
     )
@@ -77,7 +77,7 @@ def downgrade() -> None:
 
     op.drop_constraint("ck_exceptions_valid_exception_status", "exceptions", type_="check")
     op.create_check_constraint(
-        "ck_exceptions_valid_exception_status",
+        "valid_exception_status",
         "exceptions",
         _OLD_STATUS_CHECK,
     )
