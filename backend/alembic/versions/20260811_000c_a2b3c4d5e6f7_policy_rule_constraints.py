@@ -35,14 +35,14 @@ _WEIGHT_CHECK = "weight >= 0 AND weight <= 100"
 def upgrade() -> None:
     # Enforce rule_type enumeration at DB level.
     op.create_check_constraint(
-        "ck_policy_rules_valid_rule_type",
+        "valid_rule_type",
         "policy_rules",
         _RULE_TYPE_CHECK,
     )
 
     # Enforce weight is within 0-100 scoring range.
     op.create_check_constraint(
-        "ck_policy_rules_weight_range",
+        "weight_range",
         "policy_rules",
         _WEIGHT_CHECK,
     )
