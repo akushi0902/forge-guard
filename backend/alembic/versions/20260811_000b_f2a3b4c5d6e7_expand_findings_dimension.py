@@ -22,8 +22,9 @@ down_revision: str | None = "e1f2a3b4c5d6"
 branch_labels: str | None = None
 depends_on: str | None = None
 
-_OLD_CONSTRAINT = "ck_findings_valid_dimension"
-_NEW_CONSTRAINT = "ck_findings_valid_dimension"
+_OLD_CONSTRAINT = "ck_findings_valid_dimension"  # full name, for drop_constraint
+_NEW_CONSTRAINT = "ck_findings_valid_dimension"  # full name, for drop_constraint
+_SHORT_NAME = "valid_dimension"  # short name, for create_check_constraint
 
 _OLD_CHECK = (
     "dimension IN ("
@@ -42,9 +43,9 @@ _NEW_CHECK = (
 
 def upgrade() -> None:
     op.drop_constraint(_OLD_CONSTRAINT, "findings", type_="check")
-    op.create_check_constraint(_NEW_CONSTRAINT, "findings", _NEW_CHECK)
+    op.create_check_constraint(_SHORT_NAME, "findings", _NEW_CHECK)
 
 
 def downgrade() -> None:
     op.drop_constraint(_NEW_CONSTRAINT, "findings", type_="check")
-    op.create_check_constraint(_OLD_CONSTRAINT, "findings", _OLD_CHECK)
+    op.create_check_constraint(_SHORT_NAME, "findings", _OLD_CHECK)
