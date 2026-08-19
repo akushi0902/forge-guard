@@ -45,7 +45,7 @@ def upgrade() -> None:
         sa.Column(
             "rating",
             sa.String(10),
-            sa.CheckConstraint("rating IN ('thumbs_up', 'thumbs_down')", name="ck_agent_feedback_rating"),
+            sa.CheckConstraint("rating IN ('thumbs_up', 'thumbs_down')", name="rating"),
             nullable=False,
         ),
         sa.Column(
