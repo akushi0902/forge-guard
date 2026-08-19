@@ -46,11 +46,11 @@ def upgrade() -> None:
         sa.UniqueConstraint("cache_key", name="uq_ai_response_cache_cache_key"),
         sa.CheckConstraint(
             "source IN ('ai_generated','template_fallback','manual')",
-            name="ck_ai_response_cache_valid_source",
+            name="valid_source",
         ),
         sa.CheckConstraint(
             "confidence_score >= 0 AND confidence_score <= 1",
-            name="ck_ai_response_cache_valid_confidence_score",
+            name="valid_confidence_score",
         ),
     )
     op.create_index(
