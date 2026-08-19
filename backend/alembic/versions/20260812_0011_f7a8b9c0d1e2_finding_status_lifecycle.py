@@ -26,7 +26,7 @@ depends_on = None
 
 def upgrade() -> None:
     # Replace the finding status CHECK constraint with new lifecycle values.
-    op.drop_constraint("valid_finding_status", "findings", type_="check")
+    op.drop_constraint("ck_findings_valid_finding_status", "findings", type_="check")
     op.create_check_constraint(
         "valid_finding_status",
         "findings",
@@ -53,7 +53,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("idx_findings_service_policy_rule_status", table_name="findings")
     op.drop_index("idx_findings_dedup", table_name="findings")
-    op.drop_constraint("valid_finding_status", "findings", type_="check")
+    op.drop_constraint("ck_findings_valid_finding_status", "findings", type_="check")
     op.create_check_constraint(
         "valid_finding_status",
         "findings",
